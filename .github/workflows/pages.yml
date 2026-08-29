@@ -4,8 +4,8 @@ on:
   push:
     branches: [main, master]
   schedule:
-    # Refresh MUFG IPO list every 6 hours (UTC)
-    - cron: '0 */6 * * *'
+    # Refresh MUFG IPO list every hour (UTC)
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 permissions:

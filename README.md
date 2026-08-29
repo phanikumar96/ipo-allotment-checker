@@ -25,7 +25,7 @@ GitHub Pages serves the static UI only. MUFG needs the `/api/proxy` serverless f
 
 Every push to `main` auto-updates the `gh-pages` branch via GitHub Actions.
 
-The IPO list also **auto-refreshes every 6 hours** from MUFG (scheduled GitHub Action).
+The IPO list also **auto-refreshes every hour** from MUFG (scheduled GitHub Action).
 
 ### 2. Render (MUFG PAN search — one-time setup)
 
