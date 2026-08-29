@@ -3,6 +3,9 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [main, master]
+  schedule:
+    # Refresh MUFG IPO list every 6 hours (UTC)
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 permissions:
