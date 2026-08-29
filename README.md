@@ -4,6 +4,10 @@ IPO allotment checker for **KFINTECH** and **MUFG** registrars.
 
 Live site: [phanikumar96.github.io/ipo-allotment-checker](https://phanikumar96.github.io/ipo-allotment-checker/)
 
+Live Site: [ipo-allotment-checker-two.vercel.app](https://ipo-allotment-checker-two.vercel.app/)
+
+
+
 ## Features
 
 - Check multiple PANs at once
