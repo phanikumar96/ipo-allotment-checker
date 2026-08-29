@@ -25,6 +25,7 @@ jobs:
         run: |
           mkdir -p public
           cp index.html public/
+          python3 scripts/fetch_ipos.py public/ipos.json
           touch public/.nojekyll
 
       - name: Deploy to gh-pages branch

@@ -6,6 +6,7 @@ from http.cookiejar import CookieJar
 from urllib.error import HTTPError, URLError
 from pathlib import Path
 import json
+import os
 import sys
 import xml.etree.ElementTree as ET
 
@@ -145,7 +146,8 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
-    print(f'MUFG IPO checker: http://127.0.0.1:{port}/')
+    host = os.environ.get('HOST', '0.0.0.0')
+    port = int(os.environ.get('PORT', sys.argv[1] if len(sys.argv) > 1 else 5000))
+    print(f'MUFG IPO checker: http://{host}:{port}/')
     print('Press Ctrl+C to stop.')
-    ThreadingHTTPServer(('127.0.0.1', port), Handler).serve_forever()
+    ThreadingHTTPServer((host, port), Handler).serve_forever()

@@ -1337,12 +1337,17 @@ $(function(){
     /* ------------------------------------------------------------------ *
      * MUFG IPO list + client ID
      * ------------------------------------------------------------------ */
+    function appBase(){
+        var path=location.pathname;
+        var slash=path.lastIndexOf('/');
+        return slash>=0 ? path.slice(0,slash+1) : '/';
+    }
     function mugProxyBase(){
         var mugEndpoint=$('#mugUrl').val().trim();
         var isPages=/\.github\.io$/i.test(location.hostname);
         if(!mugEndpoint || (isPages && mugEndpoint==='/api/proxy')){
             mugEndpoint=isPages
-                ? 'https://ipo-allotment-checker.vercel.app/api/proxy'
+                ? 'https://ipo-allotment-checker-api.onrender.com/api/proxy'
                 : '/api/proxy';
         }
         if(location.protocol==='file:' && mugEndpoint.charAt(0)==='/'){
@@ -1362,32 +1367,49 @@ $(function(){
         store.set('clientId',id);
         store.set('mugIpoId',id);
     }
-    function loadMufgIpos(){
+    function fillMufgIpoList(list){
         var $sel=$('#mugIpoSelect');
-        $sel.html('<option value="">Loading IPOs…</option>');
+        if(!Array.isArray(list) || !list.length){
+            $sel.html('<option value="">No IPOs available</option>');
+            return;
+        }
+        var html='<option value="">Select an IPO</option>', i;
+        for(i=0;i<list.length;i++){
+            html+='<option value="'+esc(list[i].id)+'">'+esc(list[i].name)+'</option>';
+        }
+        $sel.html(html);
+        var saved=store.get('mugIpoId','');
+        if(saved && $sel.find('option[value="'+saved+'"]').length) $sel.val(saved);
+        syncMugClientId();
+        $('#mugIpoHint').text('Choose the IPO — the company\'s client ID is sent automatically.');
+    }
+    function loadMufgIposFromApi(){
         $.ajax({
             url:apiUrl(mugProxyBase()+'?action=ipos'),
             type:'GET',
             dataType:'json',
-            success:function(list){
-                if(!Array.isArray(list) || !list.length){
-                    $sel.html('<option value="">No IPOs available</option>');
-                    return;
-                }
-                var html='<option value="">Select an IPO</option>', i;
-                for(i=0;i<list.length;i++){
-                    html+='<option value="'+esc(list[i].id)+'">'+esc(list[i].name)+'</option>';
-                }
-                $sel.html(html);
-                var saved=store.get('mugIpoId','');
-                if(saved && $sel.find('option[value="'+saved+'"]').length) $sel.val(saved);
-                syncMugClientId();
-            },
+            success:fillMufgIpoList,
             error:function(){
-                $sel.html('<option value="">Could not load IPO list</option>');
+                $('#mugIpoSelect').html('<option value="">Could not load IPO list</option>');
                 $('#mugIpoHint').html('Could not load IPOs — check the MUFG endpoint in Advanced and that <code>api/proxy</code> is deployed.');
             }
         });
+    }
+    function loadMufgIpos(){
+        var $sel=$('#mugIpoSelect');
+        $sel.html('<option value="">Loading IPOs…</option>');
+        if(/\.github\.io$/i.test(location.hostname)){
+            $.ajax({
+                url:appBase()+'ipos.json?_='+Date.now(),
+                type:'GET',
+                dataType:'json',
+                cache:false,
+                success:fillMufgIpoList,
+                error:loadMufgIposFromApi
+            });
+            return;
+        }
+        loadMufgIposFromApi();
     }
     function updateClientTypeUI(){
         var mug=$('input[name=clientType]:checked').val()==='MUG';

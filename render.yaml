@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: ipo-allotment-checker-api
+    runtime: python
+    plan: free
+    buildCommand: ""
+    startCommand: python mufg_proxy_server_v2.py
+    healthCheckPath: /api/proxy?action=ipos
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
