@@ -4,8 +4,8 @@ on:
   push:
     branches: [main, master]
   schedule:
-    # Refresh MUFG IPO list every hour (UTC)
-    - cron: '0 * * * *'
+    # Refresh MUFG IPO list every hour on the IST hour mark (IST = UTC+5:30 → :30 UTC)
+    - cron: '30 * * * *'
   workflow_dispatch:
 
 permissions:

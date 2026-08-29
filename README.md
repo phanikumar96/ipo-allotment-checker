@@ -29,7 +29,9 @@ GitHub Pages serves the static UI only. MUFG needs the `/api/proxy` serverless f
 
 Every push to `main` auto-updates the `gh-pages` branch via GitHub Actions.
 
-The IPO list also **auto-refreshes every hour** from MUFG (scheduled GitHub Action).
+The IPO list also **auto-refreshes every hour IST** from MUFG (scheduled GitHub Action at `:30` UTC = top of each IST hour).
+
+Retail / S-HNI / B-HNI **filters** come from the registrar (`PEMNDG` for MUFG; category field for KFINTECH). There is no Category column in the table.
 
 ### 2. Vercel (MUFG PAN search — required, one-time)
 
