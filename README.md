@@ -31,7 +31,7 @@ Every push to `main` auto-updates the `gh-pages` branch via GitHub Actions.
 
 The IPO list also **auto-refreshes every hour IST** from MUFG (scheduled GitHub Action at `:30` UTC = top of each IST hour).
 
-Retail / S-HNI / B-HNI **filters** come from the registrar (`PEMNDG` for MUFG; category field for KFINTECH). There is no Category column in the table.
+Retail / S-HNI / B-HNI **filters:** MUFG uses `PEMNDG` from the registrar; KFINTECH uses allotted-share size (smallest = Retail, largest = B-HNI, in between = S-HNI). There is no Category column in the table.
 
 ### 2. Vercel (MUFG PAN search — required, one-time)
 
