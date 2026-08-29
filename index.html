@@ -395,9 +395,9 @@
                         — one-time, ~2 minutes — then click <b>Retry failed</b>.
                     </div>
                 </div>
-                <div class="hint">Categories come from the applied quantity: the <b>smallest</b> quantity is
-                    <b>Retail</b>, the <b>largest</b> is <b>B-HNI</b>, and everything in between is <b>S-HNI</b>.
-                    Pin a different retail quantity under Advanced if you know the real limit.</div>
+                <div class="hint">Retail / S-HNI / B-HNI filters use the registrar field <b>PEMNDG</b>
+                    (MUFG) or the category field (KFINTECH). The table does not show a Category column —
+                    tap a chip under the results to filter.</div>
             </div>
         </div>
 
@@ -415,7 +415,7 @@
         <details class="adv">
             <summary>Advanced &amp; troubleshooting</summary>
             <div class="body">
-                <div class="row-3">
+                <div class="row-2">
                     <div>
                         <label for="speedSelect">Requests at a time</label>
                         <select id="speedSelect">
@@ -429,17 +429,10 @@
                         <input id="lotSize" type="number" min="0" step="1" inputmode="numeric"
                             autocomplete="off" placeholder="auto-detected">
                     </div>
-                    <div>
-                        <label for="retailCap">Retail quantity (shares)</label>
-                        <input id="retailCap" type="number" min="0" step="1" inputmode="numeric"
-                            autocomplete="off" placeholder="auto-detected">
-                    </div>
                 </div>
                 <div class="hint" style="margin-top:9px">
-                    Leave the two quantity boxes blank to auto-detect. Lot size is the greatest common divisor of
-                    the returned quantities; the retail quantity defaults to the <b>smallest</b> quantity in the batch.
-                    Set it here if you know the real retail limit — then anything up to that figure counts as Retail
-                    and only larger quantities become S-HNI / B-HNI.
+                    Leave lot size blank to auto-detect (greatest common divisor of returned quantities).
+                    Categories always come from the registrar (<b>PEMNDG</b> / category field), not from quantity size.
                 </div>
                 <div class="row-2" style="margin-top:10px">
                     <div>
@@ -524,12 +517,11 @@
                 <button type="button" class="filter-btn" data-filter="notfound">Not Found <span class="count" id="notfoundFilterCount">0</span></button>
                 <button type="button" class="filter-btn" data-filter="error">Issues <span class="count" id="errorFilterCount">0</span></button>
             </div>
-            <div class="chips" id="categoryChips">
-                <button type="button" class="filter-btn" data-category="all">Any category</button>
-                <button type="button" class="filter-btn" data-category="Retail">Retail <span class="count" id="catRetailCount">0</span></button>
-                <button type="button" class="filter-btn" data-category="SHNI">S-HNI <span class="count" id="catShniCount">0</span></button>
-                <button type="button" class="filter-btn" data-category="BHNI">B-HNI <span class="count" id="catBhniCount">0</span></button>
-                <button type="button" class="filter-btn" data-category="flagged" title="Quantities that are an exact multiple of the retail limit — possibly several retail applications on one PAN">⚠ Ambiguous <span class="count" id="catFlagCount">0</span></button>
+            <div class="chips" id="categoryChips" role="toolbar" aria-label="Filter by PEMNDG (Retail, S-HNI, B-HNI)">
+                <button type="button" class="filter-btn active" data-category="all" aria-pressed="true">Any</button>
+                <button type="button" class="filter-btn" data-category="Retail" aria-pressed="false">Retail <span class="count" id="catRetailCount">0</span></button>
+                <button type="button" class="filter-btn" data-category="SHNI" aria-pressed="false">S-HNI <span class="count" id="catShniCount">0</span></button>
+                <button type="button" class="filter-btn" data-category="BHNI" aria-pressed="false">B-HNI <span class="count" id="catBhniCount">0</span></button>
             </div>
             <div class="search-wrap">
                 <input type="text" id="searchBox" inputmode="search" autocomplete="off" placeholder="Search PAN, name or result…">
@@ -592,6 +584,10 @@ $(function(){
     var HIDDEN_KEYS   = ['appln_no','dp_clid','pan_no'];
     var ALLOT_ALIASES = ['all_shares','allot','allotted','alloted','allotted shares','allot_shares','allotedshares','allottedshares'];
     var APPL_ALIASES  = ['app_shares','shares','applied_shares','appshares','applied shares','app shares','appliedshares'];
+    // Registrar category field — MUFG uses PEMNDG; KFINTECH commonly uses category/catg.
+    var CAT_ALIASES   = ['pemndg','pem_ndg','category','catg','investor_category','appl_category',
+                         'application_category','inv_category','cat','category_name'];
+    var CAT_PREFER    = ['Retail','HNI','S-HNI','SHNI','B-HNI','BHNI','NII','QIB','Employee','Anchor'];
 
     // Registrar codes sent to the API, and the names shown to people.
     var REGISTRAR_LABEL = {FINTECH:'KFINTECH', MUG:'MUFG'};
@@ -599,7 +595,8 @@ $(function(){
     var STATUS_CLS  = {alloted:'status-allotted', none:'status-none', notfound:'status-notfound',
                        error:'status-error', queued:'status-queued', loading:'status-loading'};
     var STATUS_ORDER = {alloted:0, none:1, notfound:2, error:3, queued:4};
-    var CAT_ORDER    = {Retail:0, SHNI:1, BHNI:2, 'N/A':3};
+    var CAT_DISPLAY  = {SHNI:'S-HNI', BHNI:'B-HNI', RETAIL:'Retail', HNI:'S-HNI'};
+    var CAT_FILTERS  = ['Retail','SHNI','BHNI'];
 
     var records = [];          // one entry per result row
     var extraCols = [];        // dynamic columns discovered from the API payload
@@ -613,7 +610,7 @@ $(function(){
 
     function blankStats(){
         return {total:0, alloted:0, none:0, notfound:0, error:0, queued:0,
-                applied:0, allotted:0, rate:0, cat:{Retail:0, SHNI:0, BHNI:0, 'N/A':0}};
+                applied:0, allotted:0, rate:0, cat:{}};
     }
 
     /* ------------------------------------------------------------------ *
@@ -690,7 +687,43 @@ $(function(){
         var lk=String(key).toLowerCase();
         if(nameKey && lk===String(nameKey).toLowerCase()) return true;
         if(/^(name|name1|nam1|inv_name|investor_name|applicant_name|holder_name)$/.test(lk)) return true;
+        if(CAT_ALIASES.indexOf(lk)>=0) return true;
         return HIDDEN_KEYS.indexOf(lk)>=0 || ALLOT_ALIASES.indexOf(lk)>=0 || APPL_ALIASES.indexOf(lk)>=0;
+    }
+    function pickCategoryRaw(item){
+        if(!item) return '';
+        var raw=pickValue(item, CAT_ALIASES);
+        if(raw===undefined||raw===null) return '';
+        return String(raw).trim();
+    }
+    // Map registrar PEMNDG / category text onto the three interactive filters.
+    function catBucket(raw){
+        var k=String(raw||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+        if(!k) return 'N/A';
+        if(/bhni|bighni|^bnihni$/.test(k) || k==='bhni') return 'BHNI';
+        if(/^retail/.test(k) || k==='rii' || k==='ri' || k==='individual') return 'Retail';
+        if(/shni|smallhni|^hni$|^nii$|noninst/.test(k)) return 'SHNI';
+        return 'N/A';
+    }
+    function pickCategory(item){
+        return catBucket(pickCategoryRaw(item));
+    }
+    function displayCat(cat){
+        if(!cat || cat==='N/A') return 'N/A';
+        return CAT_DISPLAY[cat] || CAT_DISPLAY[String(cat).toUpperCase()] || cat;
+    }
+    function categoryClass(cat){
+        var k=String(cat||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+        if(k==='retail') return 'category-retail';
+        if(k==='hni'||k==='shni'||k==='nii'||k==='employee') return 'category-shni';
+        if(k==='bhni'||k==='qib'||k==='anchor') return 'category-bhni';
+        return 'category-na';
+    }
+    function catSortKey(cat){
+        var i=CAT_PREFER.indexOf(cat);
+        if(i<0) i=CAT_PREFER.indexOf(String(cat).toUpperCase());
+        if(i<0 && cat==='N/A') return 900;
+        return i<0 ? 100+String(cat).charCodeAt(0) : i;
     }
     // A key already added to extraCols before nameKey was known must be dropped.
     function pruneCols(){
@@ -710,7 +743,7 @@ $(function(){
     var idSeq=0;
     function newRecord(pan,no){
         return {id:++idSeq, no:no, pan:pan, status:'queued', name:'', applied:0, allotted:0,
-                category:'N/A', lots:0, apps:1, note:'',
+                category:'N/A', pemndg:'', lots:0, apps:1, note:'',
                 item:null, message:'', statusNote:''};
     }
     function labelNo(rec){
@@ -720,18 +753,14 @@ $(function(){
     /* ------------------------------------------------------------------ *
      * Category engine
      * ------------------------------------------------------------------
-     * Categories are read off the applied quantities by size:
-     *     Retail : the smallest applied quantity in the batch
-     *     B-HNI  : the largest applied quantity in the batch
-     *     S-HNI  : every quantity in between
-     * "Retail quantity" in Advanced overrides the smallest value, so anything
-     * up to that figure counts as Retail instead.
-     * The same PAN may legally carry up to 5 retail applications, so a
-     * quantity that is a whole multiple of the retail quantity is flagged as
-     * ambiguous rather than silently called HNI.
+     * Category is always taken from the registrar payload:
+     *     MUFG     → PEMNDG (e.g. Retail, HNI)
+     *     KFINTECH → category / catg / same-family fields
+     * Quantity size is never used to invent Retail / S-HNI / B-HNI.
+     * Lot size (optional Advanced override, else GCD) only fills the Lots column.
      * ------------------------------------------------------------------ */
-    var cfg = {lot:0, cap:0};            // optional overrides from Advanced
-    var basis = {lot:0, cap:0, min:0, max:0, common:0, how:'', ok:false};
+    var cfg = {lot:0};            // optional lot-size override from Advanced
+    var basis = {lot:0, how:'', ok:false, source:''};
 
     function qtyOf(r){ return r.applied>0 ? r.applied : r.allotted; }
     function gcd2(a,b){ a=Math.abs(a); b=Math.abs(b); while(b){ var t=a%b; a=b; b=t; } return a; }
@@ -742,71 +771,53 @@ $(function(){
         for(var i=0;i<values.length;i++){ g=gcd2(g,values[i]); if(g===1) break; }
         return g>0?g:1;
     }
-    // The most repeated quantity, reported for context only - it no longer
-    // decides the category.
-    function commonQty(values){
-        var freq={}, i;
-        for(i=0;i<values.length;i++) freq[values[i]]=(freq[values[i]]||0)+1;
-        var keys=Object.keys(freq).map(Number).sort(function(a,b){ return a-b; });
-        var bestQty=0, bestN=0;
-        for(i=0;i<keys.length;i++){
-            if(freq[keys[i]]>=bestN){ bestN=freq[keys[i]]; bestQty=keys[i]; }
-        }
-        return bestQty;
-    }
 
     function categorise(){
-        records.forEach(function(r){
-            r.category='N/A'; r.lots=0; r.note=''; r.apps=1;
-        });
-
-        // how many applications share each PAN (siblings returned by the API)
         var perPan={};
         records.forEach(function(r){ perPan[r.pan]=(perPan[r.pan]||0)+1; });
-        records.forEach(function(r){ r.apps=perPan[r.pan]||1; });
+
+        var withCat=0, sourceHint='';
+        records.forEach(function(r){
+            r.lots=0; r.note=''; r.apps=perPan[r.pan]||1;
+            r.pemndg=pickCategoryRaw(r.item);
+            var fromApi=pickCategory(r.item);
+            r.category=fromApi || 'N/A';
+            if(fromApi && fromApi!=='N/A'){
+                withCat++;
+                if(!sourceHint && r.item){
+                    var keys=Object.keys(r.item);
+                    for(var i=0;i<keys.length;i++){
+                        if(CAT_ALIASES.indexOf(keys[i].toLowerCase())>=0){ sourceHint=keys[i]; break; }
+                    }
+                }
+            }
+            if(r.apps>1) r.note=r.apps+' applications found on this PAN.';
+        });
 
         var values=records.map(qtyOf).filter(function(v){ return v>0; });
-        basis={lot:0, cap:0, min:0, max:0, common:0, how:'', ok:false};
-        if(!values.length){ basis.how='No quantities returned yet.'; return; }
+        basis={lot:0, how:'', ok:false, source:sourceHint||'PEMNDG / category'};
+        if(!values.length && !withCat){
+            basis.how='No registrar category or quantities returned yet.';
+            return;
+        }
+        var lot = cfg.lot>0 ? cfg.lot : (values.length ? detectLot(values) : 0);
+        basis.lot=lot;
+        basis.ok=true;
+        basis.how = withCat
+            ? ('Retail / S-HNI / B-HNI come from "'+basis.source+'" '+
+               '(MUFG: PEMNDG · KFINTECH: category). '+withCat+' of '+records.length+
+               ' row'+(records.length===1?' has':'s have')+' a mapped category. Use the chips to filter.'+
+               (lot ? ' Lot size '+nf(lot)+' share'+(lot===1?'':'s')+
+                (cfg.lot>0?' (pinned in Advanced)':' (auto-detected)')+'.' : ''))
+            : ('No PEMNDG/category field in the responses yet — filters stay at 0.'+
+               (lot ? ' Lot size '+nf(lot)+'.' : ''));
 
-        var lot = cfg.lot>0 ? cfg.lot : detectLot(values);
-        var min = Math.min.apply(null, values);
-        var max = Math.max.apply(null, values);
-        // Smallest quantity is Retail unless Advanced pins a retail quantity.
-        var cap = cfg.cap>0 ? cfg.cap : min;
-        if(cap>max) cap=max;
-        basis.lot=lot; basis.cap=cap; basis.min=min; basis.max=max;
-        basis.common=commonQty(values); basis.ok=true;
-        basis.how = (cfg.cap>0
-                ? 'Retail quantity pinned to '+nf(cap)+' shares in Advanced, so anything up to that is Retail.'
-                : 'Smallest quantity applied is '+nf(cap)+' shares — that is Retail.')+
-            ' The largest is '+nf(max)+' shares — that is B-HNI.'+
-            (max>cap ? ' Everything in between is S-HNI.'
-                     : ' Every application in this batch is the same size, so there is nothing in between.')+
-            ' Lot size '+nf(lot)+
-            (basis.common && basis.common!==cap && basis.common!==max
-                ? '. Most common quantity: '+nf(basis.common)+' shares' : '')+'.';
-
-        records.forEach(function(r){
-            var q=qtyOf(r);
-            if(q<=0) return;
-            r.lots = lot>0 ? Math.round(q/lot) : 0;
-
-            // Smallest quantity is Retail, largest is B-HNI, rest is S-HNI.
-            if(q<=cap)      r.category='Retail';
-            else if(q>=max) r.category='BHNI';
-            else            r.category='SHNI';
-
-            // One PAN may legally carry up to 5 retail applications, so a whole
-            // multiple of the retail quantity is ambiguous - flag it, don't guess.
-            if(q>cap && cap>0 && q%cap===0 && q/cap<=5){
-                r.note=(q/cap)+' × the retail quantity — may be '+(q/cap)+
-                       ' retail applications on one PAN rather than '+
-                       (r.category==='BHNI'?'B-HNI':'S-HNI')+'.';
-            } else if(r.apps>1){
-                r.note=r.apps+' applications found on this PAN.';
-            }
-        });
+        if(lot>0){
+            records.forEach(function(r){
+                var q=qtyOf(r);
+                if(q>0) r.lots=Math.round(q/lot);
+            });
+        }
     }
 
     function recompute(){
@@ -851,12 +862,30 @@ $(function(){
         $('#noneCount').text(stats.none);
         $('#notfoundFilterCount').text(stats.notfound);
         $('#errorFilterCount').text(stats.error);
-        $('#catRetailCount').text(stats.cat.Retail||0);
-        $('#catShniCount').text(stats.cat.SHNI||0);
-        $('#catBhniCount').text(stats.cat.BHNI||0);
-        $('#catFlagCount').text(records.filter(function(r){ return /the retail quantity/.test(r.note||''); }).length);
+        renderCategoryChips();
         $('#totalRowCount').text(stats.total);
         $('#retryBtn').toggleClass('hidden', !(stats.error>0) || running);
+    }
+    function categoryBreakdown(){
+        var counts={}, order=[];
+        records.forEach(function(r){
+            var c=r.category||'N/A';
+            if(!counts[c]){ counts[c]=0; order.push(c); }
+            counts[c]++;
+        });
+        order.sort(function(a,b){
+            var d=catSortKey(a)-catSortKey(b);
+            return d || String(a).localeCompare(String(b));
+        });
+        return {order:order, counts:counts};
+    }
+    function renderCategoryChips(){
+        var data=categoryBreakdown();
+        $('#catRetailCount').text(data.counts.Retail||0);
+        $('#catShniCount').text(data.counts.SHNI||0);
+        $('#catBhniCount').text(data.counts.BHNI||0);
+        if(fCategory!=='all' && CAT_FILTERS.indexOf(fCategory)<0) fCategory='all';
+        syncChips();
     }
 
     /* ------------------------------------------------------------------ *
@@ -864,7 +893,7 @@ $(function(){
      * ------------------------------------------------------------------ */
     function columns(){
         var cols=[{key:'no',label:'#'},{key:'pan',label:'PAN'},{key:'status',label:'Status'},
-                {key:'category',label:'Category'},{key:'applied',label:'Applied Shares',num:true},
+                {key:'applied',label:'Applied Shares',num:true},
                 {key:'allotted',label:'Allotted Shares',num:true},
                 {key:'lots',label:'Lots',num:true},
                 {key:'name',label:'Name'}];
@@ -885,8 +914,7 @@ $(function(){
         return '<span class="status-pill '+(STATUS_CLS[rec.status]||'status-none')+'">'+extra+esc(text)+'</span>';
     }
     function categoryPill(cat){
-        var cls={Retail:'category-retail',SHNI:'category-shni',BHNI:'category-bhni'}[cat]||'category-na';
-        return '<span class="category-pill '+cls+'">'+esc(cat)+'</span>';
+        return '<span class="category-pill '+categoryClass(cat)+'">'+esc(displayCat(cat))+'</span>';
     }
     function cellValue(rec,col){
         switch(col.key){
@@ -919,10 +947,6 @@ $(function(){
                 return;
             }
             if(c.key==='status'){ html+='<td data-label="Status">'+statusPill(rec)+'</td>'; return; }
-            if(c.key==='category'){
-                var flag=rec.note?'<span class="cat-flag" title="'+esc(rec.note)+'" tabindex="0" role="button" aria-label="'+esc(rec.note)+'">!</span>':'';
-                html+='<td data-label="Category">'+categoryPill(rec.category)+flag+'</td>'; return;
-            }
             if(c.num){ cls='num-cell'; disp=nf(raw); if(!raw) cls+=' zero'; }
             else disp = (raw&&typeof raw==='object') ? JSON.stringify(raw) : String(raw===undefined||raw===null?'':raw);
             if(disp===''||disp==='0'&&c.num&&rec.status!=='alloted'&&rec.status!=='none') cls+=' blank';
@@ -937,7 +961,10 @@ $(function(){
         if(rec.message) items.push({k:'Information',v:rec.message});
         items.push({k:'PAN',v:rec.pan});
         items.push({k:'Status',v:STATUS_TEXT[rec.status]||rec.status});
-        items.push({k:'Category',v:rec.category});
+        if(rec.pemndg || pickCategoryRaw(rec.item)){
+            items.push({k:'PEMNDG',v:rec.pemndg||pickCategoryRaw(rec.item)});
+            items.push({k:'Mapped filter',v:displayCat(rec.category)});
+        }
         items.push({k:'Applied Shares',v:nf(rec.applied)});
         items.push({k:'Allotted Shares',v:nf(rec.allotted)});
         if(rec.lots) items.push({k:'Lots',v:nf(rec.lots)});
@@ -969,7 +996,10 @@ $(function(){
             if(k==='no'){ av=a.no; bv=b.no; }
             else if(k==='pan'){ return d*String(a.pan).localeCompare(String(b.pan)) || (a.no-b.no); }
             else if(k==='status'){ av=STATUS_ORDER[a.status]; bv=STATUS_ORDER[b.status]; }
-            else if(k==='category'){ av=CAT_ORDER[a.category]; bv=CAT_ORDER[b.category]; }
+            else if(k==='category'){
+                av=catSortKey(a.category||'N/A'); bv=catSortKey(b.category||'N/A');
+                if(av===bv) return d*String(a.category||'').localeCompare(String(b.category||'')) || (a.no-b.no);
+            }
             else if(k==='applied'||k==='allotted'||k==='lots'){ av=a[k]; bv=b[k]; }
             else if(k==='name'){ return d*String(a.name||'').localeCompare(String(b.name||'')) || (a.no-b.no); }
             else {
@@ -985,10 +1015,9 @@ $(function(){
     }
     function matches(rec){
         if(fStatus!=='all' && rec.status!==fStatus) return false;
-        if(fCategory==='flagged'){ if(!/the retail quantity/.test(rec.note||'')) return false; }
-        else if(fCategory!=='all' && rec.category!==fCategory) return false;
+        if(fCategory!=='all' && rec.category!==fCategory) return false;
         if(!fTerm) return true;
-        var hay=[rec.pan, STATUS_TEXT[rec.status], rec.category, rec.name, rec.message,
+        var hay=[rec.pan, STATUS_TEXT[rec.status], displayCat(rec.category), rec.category, rec.name, rec.message,
                  rec.applied, rec.allotted].join(' ');
         if(rec.item) hay+=' '+Object.keys(rec.item).map(function(k){ return rec.item[k]; }).join(' ');
         return hay.toLowerCase().indexOf(fTerm)>=0;
@@ -1019,11 +1048,10 @@ $(function(){
                 : 'Nothing to show yet — add PANs above and tap <b>Check All PANs</b>.'));
     }
     $(document).on('click','#clearFiltersEmpty',function(e){ e.preventDefault(); clearFilters(); render(); });
-    var CAT_LABEL={Retail:'Retail', SHNI:'S-HNI', BHNI:'B-HNI', flagged:'Ambiguous quantities'};
     function paintActiveFilters(shown){
         var tags=[];
         if(fStatus!=='all')   tags.push('Status: '+(STATUS_TEXT[fStatus]||fStatus));
-        if(fCategory!=='all') tags.push('Category: '+(CAT_LABEL[fCategory]||fCategory));
+        if(fCategory!=='all') tags.push('Category: '+displayCat(fCategory));
         if(fTerm)             tags.push('Search: “'+fTerm+'”');
         var $f=$('#activeFilters');
         if(!tags.length){ $f.addClass('hidden').empty(); return; }
@@ -1037,20 +1065,10 @@ $(function(){
         syncChips();
     }
     $(document).on('click','#clearFilters',function(e){ e.preventDefault(); clearFilters(); render(); });
-    $(document).on('click','#basisShowFlagged',function(e){
-        e.preventDefault();
-        setFilter('category','flagged',true);
-    });
     function paintBasis(){
         var $b=$('#basisNote');
         if(!basis.ok){ $b.addClass('hidden').empty(); return; }
-        var html='<b>How categories were decided:</b> '+esc(basis.how);
-        var flagged=records.filter(function(r){ return /the retail quantity/.test(r.note||''); }).length;
-        if(flagged) html+=' <b>'+flagged+'</b> row'+(flagged===1?' is':'s are')+
-            ' a whole multiple of the retail quantity — those may be several retail applications on one PAN'+
-            ' rather than an HNI bid (marked <span class="cat-flag">!</span>). '+
-            '<a href="#" id="basisShowFlagged">Show them</a>';
-        $b.removeClass('hidden').html(html);
+        $b.removeClass('hidden').html('<b>Category source:</b> '+esc(basis.how));
     }
     function scheduleRender(){
         if(renderQueued) return;
@@ -1252,21 +1270,21 @@ $(function(){
     /* ------------------------------------------------------------------ *
      * Filters, sorting, search
      * ------------------------------------------------------------------ */
-    /* Status and category form a single filter group — picking one clears the
-     * other, so exactly one chip is highlighted at any moment. */
+    /* Status and category filters combine (AND). Each chip group keeps its own
+     * active selection so you can e.g. show Allotted + Retail together. */
     function syncChips(){
-        var $all=$('#statusChips .filter-btn, #categoryChips .filter-btn');
-        $all.removeClass('active').attr('aria-pressed','false');
-        var $on;
-        if(fStatus!=='all')        $on=$('#statusChips .filter-btn[data-filter="'+fStatus+'"]');
-        else if(fCategory!=='all') $on=$('#categoryChips .filter-btn[data-category="'+fCategory+'"]');
-        else                       $on=$('#statusChips .filter-btn[data-filter="all"]');
-        // 'queued' comes from the donut and has no chip, so nothing lights up there.
-        $on.addClass('active').attr('aria-pressed','true');
+        $('#statusChips .filter-btn').each(function(){
+            var on=String($(this).attr('data-filter'))===(fStatus||'all');
+            $(this).toggleClass('active',on).attr('aria-pressed',on?'true':'false');
+        });
+        $('#categoryChips .filter-btn').each(function(){
+            var on=String($(this).attr('data-category'))===(fCategory||'all');
+            $(this).toggleClass('active',on).attr('aria-pressed',on?'true':'false');
+        });
     }
     function setFilter(kind,value,scroll){
-        if(kind==='category'){ fCategory=value||'all'; fStatus='all'; }
-        else                 { fStatus=value||'all';   fCategory='all'; }
+        if(kind==='category') fCategory=value||'all';
+        else                  fStatus=value||'all';
         syncChips();
         render();
         if(scroll) document.getElementById('resultsSection').scrollIntoView({behavior:'smooth',block:'start'});
@@ -1276,7 +1294,9 @@ $(function(){
         var f=String($(this).attr('data-filter'));
         setFilter('status', f===fStatus ? 'all' : f, false);
     });
-    $('#categoryChips').on('click','.filter-btn',function(){
+    $('#categoryChips').on('click keydown','.filter-btn',function(ev){
+        if(ev.type==='keydown' && ev.key!=='Enter' && ev.key!==' ') return;
+        if(ev.type==='keydown') ev.preventDefault();
         var c=String($(this).attr('data-category'));
         setFilter('category', c===fCategory ? 'all' : c, false);
     });
@@ -1468,6 +1488,8 @@ $(function(){
         rec.allotted=parseNum(pickValue(item,ALLOT_ALIASES));
         rec.applied=parseNum(pickValue(item,APPL_ALIASES));
         rec.name=pickName(item);   // sets nameKey, so it must run before ensureCols
+        rec.pemndg=pickCategoryRaw(item);
+        rec.category=pickCategory(item)||'N/A';
         ensureCols(item);
         pruneCols();
         rec.status=rec.allotted>0?'alloted':'none';
@@ -1789,8 +1811,7 @@ $(function(){
                 var v=$('input[name=clientType]:checked').val()||'';
                 return REGISTRAR_LABEL[v]||v;
             })(),
-            lot: basis.lot||cfg.lot, cap: basis.cap||cfg.cap,
-            max: basis.max||0, how: basis.how||''
+            lot: basis.lot||cfg.lot, how: basis.how||'', source: basis.source||'PEMNDG'
         };
     }
     // Fixed columns, then the payload's own extra columns. "Name" appears once:
@@ -1800,7 +1821,8 @@ $(function(){
         {h:'Client ID',       get:function(r,m){ return m.clientId; },             t:'s', w:16},
         {h:'PAN',             get:function(r){ return r.pan; },                    t:'s', w:14},
         {h:'Status',          get:function(r){ return STATUS_TEXT[r.status]||r.status; }, t:'s', w:15},
-        {h:'Category',        get:function(r){ return r.category; },               t:'s', w:11},
+        {h:'PEMNDG',          get:function(r){ return r.pemndg||''; },             t:'s', w:14},
+        {h:'Filter (PEMNDG)', get:function(r){ return displayCat(r.category); },    t:'s', w:14},
         {h:'Applied Shares',  get:function(r){ return r.applied; },                t:'n', w:14, fmt:'int'},
         {h:'Allotted Shares', get:function(r){ return r.allotted; },               t:'n', w:15, fmt:'int'},
         {h:'Lots',            get:function(r){ return r.lots; },                   t:'n', w:8,  fmt:'int'},
@@ -1994,22 +2016,22 @@ $(function(){
 
     /* Sheet 4 — one row per category with cross-sheet COUNTIF/SUMIF. */
     function categorySheetXml(){
-        var order=['Retail','SHNI','BHNI','N/A'];
-        var label={Retail:'Retail — the smallest quantity applied, and below',
-                   SHNI:'S-HNI — between the smallest and the largest quantity',
-                   BHNI:'B-HNI — the largest quantity applied',
-                   'N/A':'Not classified'};
+        var br=categoryBreakdown();
+        var order=br.order.length ? br.order.slice() : ['N/A'];
         var lastData=records.length+1;
+        var lastCatRow=4+order.length;
+        var totalRow=lastCatRow+1;
         var rows=[];
         rows.push([S('Category breakdown',1)]);
-        rows.push([S(basis.how||'',11)]);
+        rows.push([S(basis.how||'Category from registrar PEMNDG / category field.',11)]);
         rows.push([]);
-        rows.push([S('Category',2),S('Meaning',2),S('PANs',2),S('Allotted PANs',2),
+        rows.push([S('Category',2),S('Source',2),S('PANs',2),S('Allotted PANs',2),
                    S('Applied Shares',2),S('Allotted Shares',2),S('Hit Rate',2)]);
         order.forEach(function(cat,i){
             var r=5+i, q="'All Data'!$E$2:$E$"+lastData;
             rows.push([
-                S(cat,6), S(label[cat],8),
+                S(cat,6),
+                S(cat==='N/A'?'No PEMNDG/category in response':'Registrar field ('+(basis.source||'PEMNDG')+')',8),
                 F('COUNTIF('+q+',A'+r+')',3),
                 F('COUNTIFS('+q+',A'+r+",'All Data'!$D$2:$D$"+lastData+',"Allotted")',3),
                 F('SUMIF('+q+',A'+r+",'All Data'!$F$2:$F$"+lastData+')',3),
@@ -2017,12 +2039,16 @@ $(function(){
                 F('IF(C'+r+'=0,0,D'+r+'/C'+r+')',5)
             ]);
         });
-        rows.push([S('All categories',6),S('',8),F('SUM(C5:C8)',3),F('SUM(D5:D8)',3),
-                   F('SUM(E5:E8)',3),F('SUM(F5:F8)',3),F('IF(C9=0,0,D9/C9)',5)]);
+        rows.push([S('All categories',6),S('',8),
+                   F('SUM(C5:C'+lastCatRow+')',3),F('SUM(D5:D'+lastCatRow+')',3),
+                   F('SUM(E5:E'+lastCatRow+')',3),F('SUM(F5:F'+lastCatRow+')',3),
+                   F('IF(C'+totalRow+'=0,0,D'+totalRow+'/C'+totalRow+')',5)]);
         rows.push([]);
-        rows.push([S('One PAN may legally hold up to 5 retail applications, so a quantity that is a whole '+
-                     'multiple of the retail quantity is ambiguous — see the Category Note column on All Data.',11)]);
-        return sheetXml(rows,{widths:[24,30,10,15,16,16,11],merges:['A2:G2','A11:G11'],rowH:{2:30,11:32}});
+        rows.push([S('Category values come from the registrar (MUFG PEMNDG / KFINTECH category), '+
+                     'not from applied-quantity size. Filter chips on the site use the same values.',11)]);
+        return sheetXml(rows,{widths:[24,36,10,15,16,16,11],
+            merges:['A2:G2','A'+ (totalRow+2)+':G'+(totalRow+2)],
+            rowH:{2:30}});
     }
     /* Sheet 1 — Dashboard. Columns J–K hold the series the charts read from;
      * the charts themselves are anchored over columns A–I. */
@@ -2031,8 +2057,10 @@ $(function(){
                         ['Not Found',stats.notfound],['Issue',stats.error],['Not Checked',stats.queued]]
                        .filter(function(r){ return r[1]>0; });
         if(!statusRows.length) statusRows=[['No data',0]];
-        var catRows=[['Retail',stats.cat.Retail||0],['S-HNI',stats.cat.SHNI||0],
-                     ['B-HNI',stats.cat.BHNI||0],['Unclassified',stats.cat['N/A']||0]];
+        var br=categoryBreakdown();
+        var catRows=br.order.map(function(c){ return [displayCat(c), br.counts[c]||0]; })
+                            .filter(function(r){ return r[1]>0; });
+        if(!catRows.length) catRows=[['No category yet',0]];
         var top=records.filter(function(r){ return r.allotted>0; })
                        .sort(function(a,b){ return b.allotted-a.allotted; })
                        .slice(0,10).map(function(r){ return [r.pan,r.allotted]; });
@@ -2065,15 +2093,14 @@ $(function(){
             ['Registrar / client type', m.clientType],
             ['Client ID',              m.clientId||'—'],
             ['Lot size (shares)',      m.lot?nf(m.lot):'—'],
-            ['Retail quantity',        m.cap?nf(m.cap)+' shares':'—'],
-            ['Largest quantity (B-HNI)',m.max?nf(m.max)+' shares':'—']
+            ['Category field',         m.source||'PEMNDG']
         ];
         info.forEach(function(row,k){
             put(12+k,1,S(row[0],6));
             put(12+k,2,S(String(row[1]),8));
         });
-        put(19,1,S('How categories were decided',10));
-        put(20,1,S(m.how,11));
+        put(17,1,S('Category source',10));
+        put(18,1,S(m.how,11));
 
         // chart series, kept in J/K so the anchored charts do not cover them
         put(1,10,S('Status',2));            put(1,11,S('PANs',2));
@@ -2599,14 +2626,11 @@ $(function(){
     $('input[name=clientType][value="'+savedType+'"]').prop('checked',true);
     updateClientTypeUI();
     $('#lotSize').val(store.get('lot',''));
-    $('#retailCap').val(store.get('cap',''));
     function readCfg(){
         cfg.lot=Math.max(0,parseInt($('#lotSize').val(),10)||0);
-        cfg.cap=Math.max(0,parseInt($('#retailCap').val(),10)||0);
         store.set('lot',$('#lotSize').val());
-        store.set('cap',$('#retailCap').val());
     }
-    $('#lotSize,#retailCap').on('input change',function(){ readCfg(); refreshAll(); });
+    $('#lotSize').on('input change',function(){ readCfg(); refreshAll(); });
     $('#proxyUrl').val(store.get('proxy',''));
     $('#proxyUrl').on('input change',function(){ store.set('proxy',this.value.trim()); });
     readCfg();
