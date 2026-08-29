@@ -385,6 +385,11 @@
                         <option value="">Select an IPO</option>
                     </select>
                     <div class="hint" id="mugIpoHint">Choose the IPO — the company's client ID is sent automatically.</div>
+                    <div id="mugApiBanner" class="basis hidden" style="margin-top:10px;background:var(--warning-bg);border-color:var(--warning-br)">
+                        <b>MUFG PAN checks need a free API proxy</b> (GitHub Pages is static only).
+                        <a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Deploy on Vercel</a>
+                        — one-time, ~2 minutes — then click <b>Retry failed</b>.
+                    </div>
                 </div>
                 <div class="hint">Categories come from the applied quantity: the <b>smallest</b> quantity is
                     <b>Retail</b>, the <b>largest</b> is <b>B-HNI</b>, and everything in between is <b>S-HNI</b>.
@@ -1342,18 +1347,25 @@ $(function(){
         var slash=path.lastIndexOf('/');
         return slash>=0 ? path.slice(0,slash+1) : '/';
     }
+    function mugProxyCandidates(){
+        var custom=$('#mugUrl').val().trim();
+        var out=[], isPages=/\.github\.io$/i.test(location.hostname);
+        if(custom && !(isPages && custom==='/api/proxy')) out.push(custom.split('?')[0]);
+        if(isPages){
+            out.push('https://ipo-allotment-checker.vercel.app/api/proxy');
+            out.push('https://ipo-allotment-checker.pages.dev/api/proxy');
+            out.push('https://ipo-allotment-checker-api.onrender.com/api/proxy');
+        } else {
+            out.push('/api/proxy');
+            if(location.protocol==='file:') out.push('http://127.0.0.1:5000/api/proxy');
+        }
+        var seen={}, deduped=[];
+        out.forEach(function(u){ if(u && !seen[u]){ seen[u]=1; deduped.push(u); } });
+        return deduped;
+    }
     function mugProxyBase(){
-        var mugEndpoint=$('#mugUrl').val().trim();
-        var isPages=/\.github\.io$/i.test(location.hostname);
-        if(!mugEndpoint || (isPages && mugEndpoint==='/api/proxy')){
-            mugEndpoint=isPages
-                ? 'https://ipo-allotment-checker-api.onrender.com/api/proxy'
-                : '/api/proxy';
-        }
-        if(location.protocol==='file:' && mugEndpoint.charAt(0)==='/'){
-            mugEndpoint='http://127.0.0.1:5000'+mugEndpoint;
-        }
-        return mugEndpoint.split('?')[0];
+        var list=mugProxyCandidates();
+        return list.length ? list[0] : '/api/proxy';
     }
     function getClientId(){
         if($('input[name=clientType]:checked').val()==='MUG'){
@@ -1384,16 +1396,25 @@ $(function(){
         $('#mugIpoHint').text('Choose the IPO — the company\'s client ID is sent automatically.');
     }
     function loadMufgIposFromApi(){
-        $.ajax({
-            url:apiUrl(mugProxyBase()+'?action=ipos'),
-            type:'GET',
-            dataType:'json',
-            success:fillMufgIpoList,
-            error:function(){
+        var bases=mugProxyCandidates(), idx=0;
+        function attempt(){
+            if(idx>=bases.length){
                 $('#mugIpoSelect').html('<option value="">Could not load IPO list</option>');
-                $('#mugIpoHint').html('Could not load IPOs — check the MUFG endpoint in Advanced and that <code>api/proxy</code> is deployed.');
+                $('#mugIpoHint').html('Could not load IPOs — deploy the free API: <a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Deploy on Vercel</a>');
+                return;
             }
-        });
+            $.ajax({
+                url:apiUrl(bases[idx++]+'?action=ipos'),
+                type:'GET',
+                dataType:'json',
+                success:fillMufgIpoList,
+                error:function(x){
+                    if(x.status===0 || x.status===404 || x.status===502) attempt();
+                    else attempt();
+                }
+            });
+        }
+        attempt();
     }
     function loadMufgIpos(){
         var $sel=$('#mugIpoSelect');
@@ -1413,8 +1434,10 @@ $(function(){
     }
     function updateClientTypeUI(){
         var mug=$('input[name=clientType]:checked').val()==='MUG';
+        var isPages=/\.github\.io$/i.test(location.hostname);
         $('#fintechClientWrap').toggleClass('hidden',mug);
         $('#mugIpoWrap').toggleClass('hidden',!mug);
+        $('#mugApiBanner').toggleClass('hidden',!(mug && isPages));
         if(mug){
             $('#mugIpoHint').text('Choose the IPO — the company\'s client ID is sent automatically.');
             loadMufgIpos();
@@ -1485,42 +1508,53 @@ $(function(){
             var xhr;
 
             if(clientType==='MUG'){
-                // MUFG blocks browser cross-origin AJAX (HTTP 0/CORS).  The
-                // page therefore talks to a same-origin /api/proxy function,
-                // which performs the MUFG request server-side.
-                xhr=$.ajax({
-                    url:apiUrl(mugProxyBase()), type:'POST',
-                    contentType:'application/json; charset=UTF-8',
-                    dataType:'json',
-                    data:JSON.stringify({
-                        clientid:clientId,
-                        PAN:rec.pan,
-                        IFSC:'',
-                        CHKVAL:'1',
-                        token:''
-                    }),
-                    success:function(response){
-                        try{
-                            var body=(response&&response.d!==undefined)?response.d:response;
-                            var items=(typeof body==='string')?parseMugXml(body):(Array.isArray(body)?body:(body?[body]:[]));
-                            if(items.length){
-                                applyItem(rec,items[0]);
-                                for(var k=1;k<items.length;k++) addSibling(rec,items[k],k);
-                            } else markNotFound(rec,'No matching MUFG record was returned.');
-                        }catch(e){ markIssue(rec,'Unable to read MUFG result: '+(e.message||e)); }
-                    },
-                    error:function(x){
-                        if(x.status===0){
-                            connFailures++;
-                            markIssue(rec,'MUFG proxy unavailable. Deploy api/proxy (Vercel) or set the MUFG endpoint in Advanced.');
-                            return;
-                        }
-                        var f=friendlyError(x);
-                        if(f.conn) connFailures++;
-                        if(f.notFound) markNotFound(rec,f.msg); else markIssue(rec,f.msg);
-                    },
-                    complete:done
+                var mugPayload=JSON.stringify({
+                    clientid:clientId,
+                    PAN:rec.pan,
+                    IFSC:'',
+                    CHKVAL:'1',
+                    token:''
                 });
+                var mugBases=mugProxyCandidates(), mugIdx=0;
+                function mugAttempt(){
+                    if(cancelled){ done(); return; }
+                    if(mugIdx>=mugBases.length){
+                        connFailures++;
+                        markIssue(rec,'MUFG proxy unavailable. <a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Deploy free API on Vercel</a> (one-time, ~2 min), then retry.');
+                        done();
+                        return;
+                    }
+                    var mugUrl=apiUrl(mugBases[mugIdx++]);
+                    xhr=$.ajax({
+                        url:mugUrl, type:'POST',
+                        contentType:'application/json; charset=UTF-8',
+                        dataType:'json',
+                        data:mugPayload,
+                        success:function(response){
+                            try{
+                                var body=(response&&response.d!==undefined)?response.d:response;
+                                var items=(typeof body==='string')?parseMugXml(body):(Array.isArray(body)?body:(body?[body]:[]));
+                                if(items.length){
+                                    applyItem(rec,items[0]);
+                                    for(var k=1;k<items.length;k++) addSibling(rec,items[k],k);
+                                } else markNotFound(rec,'No matching MUFG record was returned.');
+                            }catch(e){ markIssue(rec,'Unable to read MUFG result: '+(e.message||e)); }
+                            done();
+                        },
+                        error:function(x){
+                            if(x.status===0 || x.status===404 || x.status===502) mugAttempt();
+                            else {
+                                var f=friendlyError(x);
+                                if(f.conn) connFailures++;
+                                if(f.notFound) markNotFound(rec,f.msg); else markIssue(rec,f.msg);
+                                done();
+                            }
+                        }
+                    });
+                    activeXhr.push(xhr);
+                }
+                mugAttempt();
+                return;
             } else {
                 xhr=$.ajax({
                     url:apiUrl($('#fintechUrl').val().trim()), type:'GET',
@@ -1567,7 +1601,9 @@ $(function(){
             '<code>Access-Control-Allow-Headers: client_id, reqparam, accept</code>. '+
             (hasProxy?'Your CORS proxy is not answering either — check the prefix. '
                     :'If you cannot change the API, put a CORS proxy prefix in <b>Advanced</b>. ');
-        if(mug) msg+='MUFG must use the <code>/api/proxy</code> serverless function (deploy on Vercel, or set the full proxy URL in Advanced for GitHub Pages). ';
+        if(mug) msg+='For <b>MUFG</b> on GitHub Pages, deploy the free API once: '+
+            '<a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Deploy on Vercel</a>, '+
+            'wait ~1 min, then click <b>Retry failed</b>. ';
         msg+='Also check that the device is online and that the Client ID is correct.';
         $('#netBanner').show().html(msg);
     }

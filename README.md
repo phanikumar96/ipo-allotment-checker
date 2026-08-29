@@ -27,15 +27,17 @@ Every push to `main` auto-updates the `gh-pages` branch via GitHub Actions.
 
 The IPO list also **auto-refreshes every hour** from MUFG (scheduled GitHub Action).
 
-### 2. Render (MUFG PAN search — one-time setup)
+### 2. Vercel (MUFG PAN search — required, one-time)
 
-The IPO dropdown loads from a static `ipos.json` on GitHub Pages. Checking PANs still needs the API proxy.
+GitHub Pages cannot run the MUFG proxy. **Deploy the API once (free):**
 
-1. Open [Render Blueprint deploy](https://render.com/deploy?repo=https://github.com/phanikumar96/ipo-allotment-checker)
-2. Click **Deploy** (free tier)
-3. After deploy, the site auto-uses `https://ipo-allotment-checker-api.onrender.com/api/proxy` for MUFG PAN checks
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker)
 
-The IPO list refreshes automatically on every push to `main`.
+1. Click **Deploy** on Vercel (sign in with GitHub if asked).
+2. Wait ~1 minute for the deploy to finish.
+3. On the GitHub Pages site, select **MUFG**, pick an IPO, and click **Check All PANs**.
+
+The site auto-uses `https://ipo-allotment-checker.vercel.app/api/proxy` for MUFG PAN checks.
 
 ### Local development
 
