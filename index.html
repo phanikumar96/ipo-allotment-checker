@@ -395,9 +395,9 @@
                         — one-time, ~2 minutes — then click <b>Retry failed</b>.
                     </div>
                 </div>
-                <div class="hint"><b>MUFG:</b> Retail / S-HNI / B-HNI chips use <b>PEMNDG</b> from the registrar.
-                    <b>KFINTECH:</b> chips use <b>applied shares</b> — smallest = Retail, largest = B-HNI, anything
-                    in between = S-HNI. Tap a chip under the results to filter.</div>
+                <div class="hint"><b>MUFG:</b> chips use <b>PEMNDG</b> when the registrar sends it; otherwise the same
+                    applied-share rule as KFINTECH. <b>KFINTECH:</b> smallest applied = Retail, largest = B-HNI, in between = S-HNI.
+                    Tap a chip under the results to filter.</div>
             </div>
         </div>
 
@@ -432,7 +432,7 @@
                 </div>
                 <div class="hint" style="margin-top:9px">
                     Leave lot size blank to auto-detect (greatest common divisor of returned quantities).
-                    <b>MUFG</b> filters use PEMNDG. <b>KFINTECH</b> filters use applied-share size (smallest Retail, largest B-HNI).
+                    <b>MUFG</b> filters use PEMNDG, or applied shares if PEMNDG is missing. <b>KFINTECH</b> always uses applied-share size.
                 </div>
                 <div class="row-2" style="margin-top:10px">
                     <div>
@@ -583,7 +583,8 @@ $(function(){
 
     var HIDDEN_KEYS   = ['appln_no','dp_clid','pan_no'];
     var ALLOT_ALIASES = ['all_shares','allot','allotted','alloted','allotted shares','allot_shares','allotedshares','allottedshares'];
-    var APPL_ALIASES  = ['app_shares','shares','applied_shares','appshares','applied shares','app shares','appliedshares'];
+    var APPL_ALIASES  = ['app_shares','shares','applied_shares','appshares','applied shares','app shares','appliedshares',
+                         'no_of_shares','nof_shares','appliedqty','app_qty','qty'];
     // Registrar category field — MUFG uses PEMNDG; KFINTECH commonly uses category/catg.
     var CAT_ALIASES   = ['pemndg','pem_ndg','category','catg','investor_category','appl_category',
                          'application_category','inv_category','cat','category_name'];
@@ -695,20 +696,22 @@ $(function(){
     }
     function pickCategoryRaw(item){
         if(!item) return '';
-        if(isMug()){
-            var pem=lookup(item,'PEMNDG');
-            if(pem===undefined||pem===null) return '';
-            return String(pem).trim();
+        var pem=lookup(item,'PEMNDG');
+        if(pem!==undefined && pem!==null && String(pem).trim()!=='') return String(pem).trim();
+        var keys=Object.keys(item), i;
+        for(i=0;i<keys.length;i++){
+            if(/pem.?ndg/i.test(keys[i])){
+                var v=item[keys[i]];
+                if(v!==undefined && v!==null && String(v).trim()!=='') return String(v).trim();
+            }
         }
-        var raw=pickValue(item, CAT_ALIASES);
-        if(raw===undefined||raw===null) return '';
-        return String(raw).trim();
+        return '';
     }
     // Map MUFG PEMNDG text onto Retail / S-HNI / B-HNI. Check B-HNI before generic HNI.
     function catBucket(raw){
         var k=String(raw||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
         if(!k) return 'N/A';
-        if(k.indexOf('retail')>=0 || k==='rii' || k==='ri') return 'Retail';
+        if(k.indexOf('retail')>=0 || k==='rii' || k==='ri' || k==='ret') return 'Retail';
         if(k.indexOf('bhni')>=0 || k.indexOf('bighni')>=0) return 'BHNI';
         if(k.indexOf('smallhni')>=0 || k.indexOf('shni')>=0 || (k.indexOf('small')>=0 && k.indexOf('hni')>=0)) return 'SHNI';
         if(k==='hni' || k==='nii') return 'SHNI';
@@ -762,7 +765,8 @@ $(function(){
     /* ------------------------------------------------------------------ *
      * Category engine
      * ------------------------------------------------------------------
-     * MUFG     → PEMNDG from the registrar (Retail, Small HNI, B-HNI, …)
+     * MUFG     → PEMNDG from the registrar; if missing, same applied-share
+     *            buckets as KFINTECH
      * KFINTECH → applied shares: smallest = Retail, largest = B-HNI,
      *            everything in between = S-HNI
      * ------------------------------------------------------------------ */
@@ -779,11 +783,28 @@ $(function(){
         return g>0?g:1;
     }
 
+    function applyAppliedShareBuckets(list, rangeFrom){
+        var src=rangeFrom||list;
+        var values=src.map(function(r){ return r.applied; }).filter(function(v){ return v>0; });
+        var min=values.length?Math.min.apply(null,values):0;
+        var max=values.length?Math.max.apply(null,values):0;
+        var n=0;
+        list.forEach(function(r){
+            var q=r.applied;
+            if(q<=0){ r.category='N/A'; return; }
+            if(min===max || q<=min) r.category='Retail';
+            else if(q>=max)         r.category='BHNI';
+            else                    r.category='SHNI';
+            n++;
+        });
+        return {min:min, max:max, n:n};
+    }
+
     function categorise(){
         var perPan={};
         records.forEach(function(r){ perPan[r.pan]=(perPan[r.pan]||0)+1; });
         var mug=isMug();
-        var withCat=0, sourceHint='';
+        var withCat=0, sourceHint='', usedFallback=false;
 
         records.forEach(function(r){
             r.lots=0; r.note=''; r.apps=perPan[r.pan]||1;
@@ -798,25 +819,27 @@ $(function(){
                 r.category=fromApi || 'N/A';
                 if(fromApi && fromApi!=='N/A'){
                     withCat++;
-                    if(!sourceHint && r.item){
-                        if(lookup(r.item,'PEMNDG')!=='') sourceHint='PEMNDG';
-                    }
+                    if(!sourceHint) sourceHint='PEMNDG';
                 }
             });
-            basis={lot:0, how:'', ok:false, source:sourceHint||'PEMNDG'};
+            var missing=records.filter(function(r){ return r.category==='N/A' && r.applied>0; });
+            if(withCat===0 && missing.length){
+                var fb=applyAppliedShareBuckets(records);
+                withCat=fb.n;
+                usedFallback=fb.n>0;
+                basis={lot:0, how:'', ok:false, source:'applied shares', min:fb.min, max:fb.max};
+            } else if(missing.length){
+                var fb2=applyAppliedShareBuckets(missing, records);
+                withCat+=fb2.n;
+                usedFallback=true;
+                basis={lot:0, how:'', ok:false, source:'PEMNDG + applied shares', min:fb2.min, max:fb2.max};
+            } else {
+                basis={lot:0, how:'', ok:false, source:sourceHint||'PEMNDG'};
+            }
         } else {
-            var values=records.map(function(r){ return r.applied; }).filter(function(v){ return v>0; });
-            var min=values.length?Math.min.apply(null,values):0;
-            var max=values.length?Math.max.apply(null,values):0;
-            records.forEach(function(r){
-                var q=r.applied;
-                if(q<=0){ r.category='N/A'; return; }
-                if(min===max || q<=min) r.category='Retail';
-                else if(q>=max)         r.category='BHNI';
-                else                    r.category='SHNI';
-                withCat++;
-            });
-            basis={lot:0, how:'', ok:false, source:'applied shares', min:min, max:max};
+            var kfin=applyAppliedShareBuckets(records);
+            withCat=kfin.n;
+            basis={lot:0, how:'', ok:false, source:'applied shares', min:kfin.min, max:kfin.max};
         }
 
         var qtys=records.map(qtyOf).filter(function(v){ return v>0; });
@@ -828,8 +851,16 @@ $(function(){
         basis.lot=lot;
         basis.ok=true;
         if(mug){
-            basis.how='MUFG: Retail / S-HNI / B-HNI come from PEMNDG. '+
-                withCat+' of '+records.length+' row'+(records.length===1?' has':'s have')+' a mapped category.';
+            if(usedFallback && sourceHint){
+                basis.how='MUFG: PEMNDG used where present; rows without it use applied shares '+
+                    '(smallest '+nf(basis.min||0)+' = Retail, largest '+nf(basis.max||0)+' = B-HNI).';
+            } else if(usedFallback){
+                basis.how='MUFG: PEMNDG was not in the response — using the same applied-share rule as KFINTECH. '+
+                    'Smallest applied ('+nf(basis.min||0)+') is Retail, largest ('+nf(basis.max||0)+') is B-HNI, in between is S-HNI.';
+            } else {
+                basis.how='MUFG: Retail / S-HNI / B-HNI come from PEMNDG. '+
+                    withCat+' of '+records.length+' row'+(records.length===1?' has':'s have')+' a mapped category.';
+            }
         } else {
             basis.how='KFINTECH: smallest applied quantity ('+nf(basis.min||0)+
                 ') is Retail, largest ('+nf(basis.max||0)+
