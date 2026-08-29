@@ -17,8 +17,13 @@ GitHub Pages serves the static UI only. MUFG needs the `/api/proxy` serverless f
 ### 1. GitHub Pages (UI)
 
 1. Push this repo to GitHub.
-2. Go to **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-3. Push to `main` — `.github/workflows/pages.yml` deploys the site.
+2. Go to **Settings → Pages**.
+3. Under **Build and deployment → Source**, choose **Deploy from a branch**.
+4. Set **Branch** to `gh-pages` and folder `/ (root)`, then click **Save**.
+5. Wait 1–2 minutes, then open:
+   **https://phanikumar96.github.io/ipo-allotment-checker/**
+
+Every push to `main` auto-updates the `gh-pages` branch via GitHub Actions.
 
 ### 2. Vercel (MUFG API — required)
 
