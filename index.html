@@ -385,6 +385,10 @@
                         <option value="">Select an IPO</option>
                     </select>
                     <div class="hint" id="mugIpoHint">Choose the IPO — the company's client ID is sent automatically.</div>
+                    <label for="mugClientId" style="margin-top:12px">Or enter Client ID manually</label>
+                    <input id="mugClientId" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"
+                        placeholder="e.g. 11926 — use if IPO is not in the list yet">
+                    <div class="hint">Manual ID overrides the dropdown. Find it on the MUFG allotment page for your IPO.</div>
                     <div id="mugApiBanner" class="basis hidden" style="margin-top:10px;background:var(--warning-bg);border-color:var(--warning-br)">
                         <b>MUFG PAN checks need a free API proxy</b> (GitHub Pages is static only).
                         <a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Deploy on Vercel</a>
@@ -1369,15 +1373,19 @@ $(function(){
     }
     function getClientId(){
         if($('input[name=clientType]:checked').val()==='MUG'){
+            var manual=($('#mugClientId').val()||'').trim();
+            if(manual) return manual;
             return ($('#mugIpoSelect').val()||'').trim();
         }
         return ($('#clientId').val()||'').trim();
     }
     function syncMugClientId(){
-        var id=($('#mugIpoSelect').val()||'').trim();
+        var manual=($('#mugClientId').val()||'').trim();
+        var fromList=($('#mugIpoSelect').val()||'').trim();
+        var id=manual || fromList;
         $('#clientId').val(id);
-        store.set('clientId',id);
-        store.set('mugIpoId',id);
+        store.set('mugClientId',manual);
+        if(!manual) store.set('mugIpoId',fromList);
     }
     function fillMufgIpoList(list){
         var $sel=$('#mugIpoSelect');
@@ -1400,7 +1408,8 @@ $(function(){
         function attempt(){
             if(idx>=bases.length){
                 $('#mugIpoSelect').html('<option value="">Could not load IPO list</option>');
-                $('#mugIpoHint').html('Could not load IPOs — deploy the free API: <a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Deploy on Vercel</a>');
+                $('#mugIpoHint').html('Dropdown unavailable — enter the <b>Client ID manually</b> below, or deploy the API: '+
+                    '<a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Vercel</a>.');
                 return;
             }
             $.ajax({
@@ -1662,7 +1671,9 @@ $(function(){
         var clientId=getClientId();
         if(!clientId){
             if($('input[name=clientType]:checked').val()==='MUG'){
-                toast('Please select an IPO','err'); $('#mugIpoSelect').focus();
+                toast('Select an IPO or enter a Client ID manually','err');
+                if(!($('#mugClientId').val()||'').trim()) $('#mugIpoSelect').focus();
+                else $('#mugClientId').focus();
             } else {
                 toast("Please enter the Company's Client ID",'err'); $('#clientId').focus();
             }
@@ -2602,6 +2613,8 @@ $(function(){
 
     $('#clientId').on('input',function(){ store.set('clientId',this.value); });
     $('#mugIpoSelect').on('change',syncMugClientId);
+    $('#mugClientId').on('input',syncMugClientId);
+    $('#mugClientId').val(store.get('mugClientId',''));
     $('#speedSelect').on('change',function(){ store.set('speed',this.value); });
     $('input[name=clientType]').on('change',function(){ store.set('clientType',this.value); updateClientTypeUI(); });
     $('#mugUrl').on('change input',function(){

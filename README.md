@@ -29,13 +29,15 @@ The IPO list also **auto-refreshes every hour** from MUFG (scheduled GitHub Acti
 
 ### 2. Vercel (MUFG PAN search — required, one-time)
 
-GitHub Pages cannot run the MUFG proxy. **Deploy the API once (free):**
+GitHub Pages cannot run the MUFG proxy. **Deploy the API once:**
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker)
 
+**Is Vercel free?** Yes — the **Hobby (free) plan** is enough for personal IPO checks. It has monthly limits (serverless calls, bandwidth) that are fine for normal use. It is not a paid “lifetime” contract — Vercel may change limits or pricing later, but there is no charge on the free tier if you stay within limits and don’t add a paid plan.
+
 1. Click **Deploy** on Vercel (sign in with GitHub if asked).
 2. Wait ~1 minute for the deploy to finish.
-3. On the GitHub Pages site, select **MUFG**, pick an IPO, and click **Check All PANs**.
+3. On the GitHub Pages site, select **MUFG**, pick an IPO (or **enter Client ID manually** if the IPO is not listed yet), and click **Check All PANs**.
 
 The site auto-uses `https://ipo-allotment-checker.vercel.app/api/proxy` for MUFG PAN checks.
 
