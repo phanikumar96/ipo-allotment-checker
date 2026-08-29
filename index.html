@@ -187,7 +187,8 @@
         .legend-item:hover{background:var(--neutral-bg)}
         .legend-item .dot{width:9px;height:9px;border-radius:3px;flex:0 0 9px}
         .legend-item .lv{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums}
-        .chart-wrap{position:relative}
+        .chart-wrap{position:relative;overflow-x:auto;-webkit-overflow-scrolling:touch}
+        #barChart{min-width:100%}
         #chartTip{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--text);color:var(--bg);
             font-size:12px;padding:6px 9px;border-radius:8px;white-space:nowrap;transform:translate(-50%,-130%);z-index:5;font-weight:600}
 
@@ -374,8 +375,17 @@
                     <label class="seg"><input type="radio" name="clientType" value="FINTECH" checked><span>KFINTECH</span></label>
                     <label class="seg"><input type="radio" name="clientType" value="MUG"><span>MUFG</span></label>
                 </div>
-                <label for="clientId">Company's Client ID</label>
-                <input id="clientId" type="text" autocomplete="off" spellcheck="false" placeholder="Enter client ID">
+                <div id="fintechClientWrap">
+                    <label for="clientId">Company's Client ID</label>
+                    <input id="clientId" type="text" autocomplete="off" spellcheck="false" placeholder="Enter client ID">
+                </div>
+                <div id="mugIpoWrap" class="hidden">
+                    <label for="mugIpoSelect">IPO</label>
+                    <select id="mugIpoSelect" aria-label="Select MUFG IPO">
+                        <option value="">Select an IPO</option>
+                    </select>
+                    <div class="hint" id="mugIpoHint">Choose the IPO — the company's client ID is sent automatically.</div>
+                </div>
                 <div class="hint">Categories come from the applied quantity: the <b>smallest</b> quantity is
                     <b>Retail</b>, the <b>largest</b> is <b>B-HNI</b>, and everything in between is <b>S-HNI</b>.
                     Pin a different retail quantity under Advanced if you know the real limit.</div>
@@ -444,9 +454,11 @@
                     Leave it blank when the page and the API share a host.
                 </div>
                 <div class="hint" style="margin-top:9px">
-                    On a phone, open this page over <b>http(s)</b> (same host that serves the API) rather than from a downloaded
-                    <code>file://</code> copy — browsers block cross-origin calls from <code>file://</code>, which shows up as
-                    “Connection unavailable”. The MUFG endpoint is a same-origin proxy path. Run the included server.py and open this page from that server.
+                    MUFG needs the <code>/api/proxy</code> serverless function (see <code>api/proxy.py</code>). Deploy the
+                    whole repo to <b>Vercel</b> for same-origin <code>/api/proxy</code>, or host the page on
+                    <b>GitHub Pages</b> and set the MUFG endpoint above to your Vercel URL
+                    (e.g. <code>https://your-app.vercel.app/api/proxy</code>). On a phone, use <b>https</b> — not
+                    <code>file://</code> — or the browser blocks API calls.
                 </div>
                 <div class="hint" style="margin-top:6px">Shortcuts: <b>Ctrl/⌘+Enter</b> run · <b>/</b> search · <b>Esc</b> clear search.</div>
             </div>
@@ -1117,6 +1129,17 @@ $(function(){
     $('#donutLegend').on('click','.legend-item',function(){ setStatusFilter($(this).data('filter'),true); });
 
     var barRects=[];
+    function truncateCanvasText(ctx,text,maxWidth){
+        if(!text) return '';
+        if(ctx.measureText(text).width<=maxWidth) return text;
+        var ell='…', lo=0, hi=text.length;
+        while(lo<hi){
+            var mid=Math.ceil((lo+hi)/2);
+            if(ctx.measureText(text.slice(0,mid)).width+ctx.measureText(ell).width<=maxWidth) lo=mid;
+            else hi=mid-1;
+        }
+        return text.slice(0,lo)+ell;
+    }
     function drawBars(){
         var canvas=document.getElementById('barChart');
         if(!canvas||!canvas.getContext) return;
@@ -1125,31 +1148,44 @@ $(function(){
         if(!(topN>0)) topN=Infinity;
         var list=records.filter(function(r){ return r.allotted>0; })
                         .sort(function(a,b){ return b.allotted-a.allotted; }).slice(0,topN);
-        var cssW=Math.max(240,(canvas.parentNode.getBoundingClientRect().width||600));
-        var rowH=window.innerWidth<760?30:26, pad=10;
+        var wrap=canvas.parentNode;
+        var cssW=Math.max(240,(wrap.getBoundingClientRect().width||600));
+        var rowH=window.innerWidth<760?32:28, pad=10;
         // "All" can mean hundreds of rows — thin the rows so the canvas stays
         // within the size every browser can rasterise.
         if(list.length*rowH>4000) rowH=Math.max(6,Math.floor(4000/list.length));
         var cssH=Math.max(56,list.length*rowH+pad*2);
-        var ctx=fitCanvas(canvas,cssW,cssH);
+        var labelFont=(rowH>28?'12.5px':'12px')+' Arial';
+        var valW=64;
+        var labelW=140;
+        if(list.length){
+            var measure=document.createElement('canvas').getContext('2d');
+            measure.font=labelFont;
+            list.forEach(function(r){
+                var label=r.name||r.pan||'';
+                labelW=Math.max(labelW, measure.measureText(label).width+16);
+            });
+            labelW=Math.min(labelW, Math.max(220, cssW*0.58));
+        }
+        var chartW=Math.max(40, cssW-labelW-valW-18);
+        var canvasW=Math.max(cssW, labelW+chartW+valW+18);
+        var ctx=fitCanvas(canvas,canvasW,cssH);
         barRects=[];
         if(!list.length){
             ctx.fillStyle=cssVar('--muted')||'#98a2b3'; ctx.font='13px Arial'; ctx.textAlign='left'; ctx.textBaseline='middle';
             ctx.fillText('Allotted PANs will appear here after processing.',10,cssH/2);
             return;
         }
-        var labelW=Math.min(180,Math.max(96,cssW*0.34)), valW=58;
-        var chartW=Math.max(30,cssW-labelW-valW-14);
         var max=Math.max.apply(null,list.map(function(r){ return r.allotted; }));
         var accent=cssVar('--primary')||'#2563eb';
+        ctx.font=labelFont;
         list.forEach(function(r,i){
             var y=pad+i*rowH;
-            var label=r.name||r.pan;
-            var maxChars=Math.max(8,Math.floor(labelW/7));
-            if(label.length>maxChars) label=label.slice(0,maxChars-1)+'…';
-            ctx.fillStyle=cssVar('--muted')||'#475467'; ctx.font=(rowH>28?'12.5px':'12px')+' Arial';
-            ctx.textAlign='right'; ctx.textBaseline='middle';
-            ctx.fillText(label,labelW-8,y+rowH/2);
+            var fullLabel=r.name||r.pan;
+            var label=truncateCanvasText(ctx, fullLabel, labelW-8);
+            ctx.fillStyle=cssVar('--muted')||'#475467';
+            ctx.textAlign='left'; ctx.textBaseline='middle';
+            ctx.fillText(label,4,y+rowH/2);
             var bw=Math.max(3,(r.allotted/max)*chartW);
             var grad=ctx.createLinearGradient(labelW,0,labelW+bw,0);
             grad.addColorStop(0,accent); grad.addColorStop(1,'#7c3aed');
@@ -1159,7 +1195,7 @@ $(function(){
             else ctx.fillRect(labelW,by,bw,bh);
             ctx.fillStyle=cssVar('--text')||'#182230'; ctx.textAlign='left';
             ctx.fillText(nf(r.allotted),labelW+bw+7,y+rowH/2);
-            barRects.push({x:labelW,y:by,w:bw,h:bh,rowY:y,rowH:rowH,rec:r});
+            barRects.push({x:labelW,y:by,w:bw,h:bh,rowY:y,rowH:rowH,rec:r,fullLabel:fullLabel});
         });
     }
     function barHitTest(ev,canvas){
@@ -1177,8 +1213,8 @@ $(function(){
         if(hit){
             this.style.cursor='pointer';
             $tip.css({left:Math.min(hit.bar.x+hit.bar.w,this.getBoundingClientRect().width-10)+'px',
-                      top:(hit.bar.rowY+4)+'px', opacity:1})
-                .html(esc(hit.bar.rec.pan)+(hit.bar.rec.name?' · '+esc(hit.bar.rec.name):'')+
+                      top:(hit.bar.rowY+4)+'px', opacity:1, whiteSpace:'normal', maxWidth:'min(92vw, 420px)'})
+                .html(esc(hit.bar.rec.pan)+(hit.bar.fullLabel||hit.bar.rec.name?' · '+esc(hit.bar.fullLabel||hit.bar.rec.name):'')+
                       ' — '+nf(hit.bar.rec.allotted)+' allotted');
         } else { this.style.cursor='default'; $tip.css('opacity',0); }
     }).on('mouseleave',function(){ $('#chartTip').css('opacity',0); })
@@ -1299,6 +1335,71 @@ $(function(){
     });
 
     /* ------------------------------------------------------------------ *
+     * MUFG IPO list + client ID
+     * ------------------------------------------------------------------ */
+    function mugProxyBase(){
+        var mugEndpoint=$('#mugUrl').val().trim();
+        var isPages=/\.github\.io$/i.test(location.hostname);
+        if(!mugEndpoint || (isPages && mugEndpoint==='/api/proxy')){
+            mugEndpoint=isPages
+                ? 'https://ipo-allotment-checker.vercel.app/api/proxy'
+                : '/api/proxy';
+        }
+        if(location.protocol==='file:' && mugEndpoint.charAt(0)==='/'){
+            mugEndpoint='http://127.0.0.1:5000'+mugEndpoint;
+        }
+        return mugEndpoint.split('?')[0];
+    }
+    function getClientId(){
+        if($('input[name=clientType]:checked').val()==='MUG'){
+            return ($('#mugIpoSelect').val()||'').trim();
+        }
+        return ($('#clientId').val()||'').trim();
+    }
+    function syncMugClientId(){
+        var id=($('#mugIpoSelect').val()||'').trim();
+        $('#clientId').val(id);
+        store.set('clientId',id);
+        store.set('mugIpoId',id);
+    }
+    function loadMufgIpos(){
+        var $sel=$('#mugIpoSelect');
+        $sel.html('<option value="">Loading IPOs…</option>');
+        $.ajax({
+            url:apiUrl(mugProxyBase()+'?action=ipos'),
+            type:'GET',
+            dataType:'json',
+            success:function(list){
+                if(!Array.isArray(list) || !list.length){
+                    $sel.html('<option value="">No IPOs available</option>');
+                    return;
+                }
+                var html='<option value="">Select an IPO</option>', i;
+                for(i=0;i<list.length;i++){
+                    html+='<option value="'+esc(list[i].id)+'">'+esc(list[i].name)+'</option>';
+                }
+                $sel.html(html);
+                var saved=store.get('mugIpoId','');
+                if(saved && $sel.find('option[value="'+saved+'"]').length) $sel.val(saved);
+                syncMugClientId();
+            },
+            error:function(){
+                $sel.html('<option value="">Could not load IPO list</option>');
+                $('#mugIpoHint').html('Could not load IPOs — check the MUFG endpoint in Advanced and that <code>api/proxy</code> is deployed.');
+            }
+        });
+    }
+    function updateClientTypeUI(){
+        var mug=$('input[name=clientType]:checked').val()==='MUG';
+        $('#fintechClientWrap').toggleClass('hidden',mug);
+        $('#mugIpoWrap').toggleClass('hidden',!mug);
+        if(mug){
+            $('#mugIpoHint').text('Choose the IPO — the company\'s client ID is sent automatically.');
+            loadMufgIpos();
+        }
+    }
+
+    /* ------------------------------------------------------------------ *
      * Network
      * ------------------------------------------------------------------ */
     function friendlyError(xhr){
@@ -1357,18 +1458,16 @@ $(function(){
         return new Promise(function(resolve){
             if(cancelled){ resolve(); return; }
             var clientType=$('input[name=clientType]:checked').val();
-            var clientId=$('#clientId').val().trim();
+            var clientId=getClientId();
             var done=function(){ resolve(); };
             var xhr;
 
             if(clientType==='MUG'){
                 // MUFG blocks browser cross-origin AJAX (HTTP 0/CORS).  The
-                // page therefore talks to a same-origin /api/mufg/search
-                // proxy, which performs the MUFG request server-side.
-                var mugEndpoint=$('#mugUrl').val().trim()||((location.protocol==='file:')?'http://127.0.0.1:5000/api/mufg/search':'/api/mufg/search');
-                if(location.protocol==='file:' && mugEndpoint.charAt(0)==='/'){ mugEndpoint='http://127.0.0.1:5000'+mugEndpoint; }
+                // page therefore talks to a same-origin /api/proxy function,
+                // which performs the MUFG request server-side.
                 xhr=$.ajax({
-                    url:apiUrl(mugEndpoint), type:'POST',
+                    url:apiUrl(mugProxyBase()), type:'POST',
                     contentType:'application/json; charset=UTF-8',
                     dataType:'json',
                     data:JSON.stringify({
@@ -1391,7 +1490,7 @@ $(function(){
                     error:function(x){
                         if(x.status===0){
                             connFailures++;
-                            markIssue(rec,'MUFG proxy unavailable. Start the included server.py and open this page from http://127.0.0.1:5000/.');
+                            markIssue(rec,'MUFG proxy unavailable. Deploy api/proxy (Vercel) or set the MUFG endpoint in Advanced.');
                             return;
                         }
                         var f=friendlyError(x);
@@ -1446,7 +1545,7 @@ $(function(){
             '<code>Access-Control-Allow-Headers: client_id, reqparam, accept</code>. '+
             (hasProxy?'Your CORS proxy is not answering either — check the prefix. '
                     :'If you cannot change the API, put a CORS proxy prefix in <b>Advanced</b>. ');
-        if(mug) msg+='MUFG must be called through the included same-origin proxy because direct browser calls are blocked by CORS (HTTP 0). Open this page from the included server.py, not as file://. ';
+        if(mug) msg+='MUFG must use the <code>/api/proxy</code> serverless function (deploy on Vercel, or set the full proxy URL in Advanced for GitHub Pages). ';
         msg+='Also check that the device is online and that the Client ID is correct.';
         $('#netBanner').show().html(msg);
     }
@@ -1502,7 +1601,16 @@ $(function(){
         if(($('#panInput').val()||'').trim()){ addPans($('#panInput').val(),true); $('#panInput').val(''); }
         var unique=panList.slice();
         if(!unique.length){ toast('Add at least one PAN first','err'); $('#panAdd').focus(); return; }
-        if(!$('#clientId').val().trim()){ toast("Please enter the Company's Client ID",'err'); $('#clientId').focus(); return; }
+        var clientId=getClientId();
+        if(!clientId){
+            if($('input[name=clientType]:checked').val()==='MUG'){
+                toast('Please select an IPO','err'); $('#mugIpoSelect').focus();
+            } else {
+                toast("Please enter the Company's Client ID",'err'); $('#clientId').focus();
+            }
+            return;
+        }
+        $('#clientId').val(clientId);
 
         records=[]; extraCols=[]; nameKey=''; seqNo=0; openIds={}; counters={};
         $('#netBanner').hide(); $('#progressBar').css('width','0');
@@ -1607,7 +1715,7 @@ $(function(){
     /* ---- what goes into the workbook --------------------------------- */
     function exportMeta(){
         return {
-            clientId:  ($('#clientId').val()||'').trim(),
+            clientId:  getClientId(),
             clientType:(function(){
                 var v=$('input[name=clientType]:checked').val()||'';
                 return REGISTRAR_LABEL[v]||v;
@@ -2420,6 +2528,7 @@ $(function(){
     $('#speedSelect').val(store.get('speed','4'));
     var savedType=store.get('clientType','FINTECH');
     $('input[name=clientType][value="'+savedType+'"]').prop('checked',true);
+    updateClientTypeUI();
     $('#lotSize').val(store.get('lot',''));
     $('#retailCap').val(store.get('cap',''));
     function readCfg(){
@@ -2434,8 +2543,12 @@ $(function(){
     readCfg();
 
     $('#clientId').on('input',function(){ store.set('clientId',this.value); });
+    $('#mugIpoSelect').on('change',syncMugClientId);
     $('#speedSelect').on('change',function(){ store.set('speed',this.value); });
-    $('input[name=clientType]').on('change',function(){ store.set('clientType',this.value); });
+    $('input[name=clientType]').on('change',function(){ store.set('clientType',this.value); updateClientTypeUI(); });
+    $('#mugUrl').on('change input',function(){
+        if($('input[name=clientType]:checked').val()==='MUG') loadMufgIpos();
+    });
 
     $('#loadSample').on('click',function(e){
         e.preventDefault(); addPans(SAMPLE);
@@ -2488,7 +2601,7 @@ $(function(){
     });
 
     refreshAll();
-    setBusy(false,'Ready — '+($('#clientId').val()?'':'enter a Client ID, then ')+'tap Check All PANs.','');
+    setBusy(false,'Ready — '+(getClientId()?'':'select an IPO / enter a Client ID, then ')+'tap Check All PANs.','');
 });
 </script>
 </body>
