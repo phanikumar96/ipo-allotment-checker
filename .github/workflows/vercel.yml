@@ -12,6 +12,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Split out so the run says which of the two things is wrong: credentials
+      # that were never set, or credentials Vercel rejects.
+      - name: Check the Vercel credentials are set
+        env:
+          HAS_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
+          HAS_ORG: ${{ secrets.VERCEL_ORG_ID != '' }}
+          HAS_PROJECT: ${{ secrets.VERCEL_PROJECT_ID != '' }}
+        run: |
+          echo "VERCEL_TOKEN set:      $HAS_TOKEN"
+          echo "VERCEL_ORG_ID set:     $HAS_ORG"
+          echo "VERCEL_PROJECT_ID set: $HAS_PROJECT"
+          if [ "$HAS_TOKEN$HAS_ORG$HAS_PROJECT" != "truetruetrue" ]; then
+            echo "::error::Missing Vercel secrets. Add VERCEL_TOKEN, VERCEL_ORG_ID and VERCEL_PROJECT_ID under Settings -> Secrets and variables -> Actions, or connect the Vercel project to this repo in the Vercel dashboard and delete this workflow."
+            exit 1
+          fi
+
       # `continue-on-error: true` used to be set here, so a failed deploy still
       # reported a green tick while the live site kept serving an old
       # index.html. A broken deploy must be visible.
