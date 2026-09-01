@@ -1,59 +1,62 @@
-name: Deploy Vercel API
+name: Verify Vercel deployment
+
+# Vercel deploys this repo itself, through its Git integration - it just takes a
+# few minutes, and on a bad day closer to twenty. This workflow does not deploy;
+# it answers the only question that matters after a push: is the change live?
+#
+# It replaces a token-based deploy step that had never once worked (the
+# VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID secrets were never set) and
+# that hid the failure behind continue-on-error, so the Vercel site could sit on
+# an old index.html under a green tick. If the Git integration is ever
+# disconnected, reconnect it in the Vercel dashboard - that is the supported
+# path and needs no secrets here.
 
 on:
   push:
     branches: [main, master]
+    # The hourly ipos.json refresh does not change what is served, so it does
+    # not need twenty minutes of polling.
+    paths:
+      - 'index.html'
+      - 'api/**'
+      - 'vercel.json'
   workflow_dispatch:
 
+env:
+  SITE: https://ipo-allotment-checker-two.vercel.app
+
 jobs:
-  deploy:
+  verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Split out so the run says which of the two things is wrong: credentials
-      # that were never set, or credentials Vercel rejects.
-      - name: Check the Vercel credentials are set
-        env:
-          HAS_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
-          HAS_ORG: ${{ secrets.VERCEL_ORG_ID != '' }}
-          HAS_PROJECT: ${{ secrets.VERCEL_PROJECT_ID != '' }}
-        run: |
-          echo "VERCEL_TOKEN set:      $HAS_TOKEN"
-          echo "VERCEL_ORG_ID set:     $HAS_ORG"
-          echo "VERCEL_PROJECT_ID set: $HAS_PROJECT"
-          if [ "$HAS_TOKEN$HAS_ORG$HAS_PROJECT" != "truetruetrue" ]; then
-            echo "::error::Missing Vercel secrets. Add VERCEL_TOKEN, VERCEL_ORG_ID and VERCEL_PROJECT_ID under Settings -> Secrets and variables -> Actions, or connect the Vercel project to this repo in the Vercel dashboard and delete this workflow."
-            exit 1
-          fi
-
-      # `continue-on-error: true` used to be set here, so a failed deploy still
-      # reported a green tick while the live site kept serving an old
-      # index.html. A broken deploy must be visible.
-      - name: Deploy to Vercel
-        id: deploy
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--prod'
-
-      # The deploy step can "succeed" without the production alias moving, so
-      # the answer to "is my change live?" is checked directly: Vercel's ETag
-      # for a static file is the md5 of that file.
-      - name: Verify the live site serves this commit
+      # Vercel's ETag for a static file is the md5 of that file, so comparing
+      # md5s is an exact "is this the file I just pushed?".
+      - name: Wait for the live site to serve this commit
         run: |
           want=$(md5sum index.html | cut -d' ' -f1)
-          for i in $(seq 1 20); do
-            got=$(curl -fsS "https://ipo-allotment-checker-two.vercel.app/?ci=${GITHUB_SHA}" | md5sum | cut -d' ' -f1)
+          echo "waiting for index.html md5 $want"
+          for i in $(seq 1 60); do
+            got=$(curl -fsS "${SITE}/?ci=${GITHUB_SHA}&i=${i}" | md5sum | cut -d' ' -f1) || got=unreachable
             if [ "$want" = "$got" ]; then
-              echo "live site is serving ${GITHUB_SHA}"
+              echo "live after about $((i * 20))s"
               exit 0
             fi
-            echo "attempt $i: live=$got want=$want"
-            sleep 15
+            echo "attempt ${i}: live=$got"
+            sleep 20
           done
-          echo "::error::ipo-allotment-checker-two.vercel.app is still serving a different index.html (live=$got want=$want). Check the Vercel project and the VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID secrets."
+          echo "::error::${SITE} is still not serving this commit's index.html (live=$got want=$want). Check the project's Git integration and its latest deployment in the Vercel dashboard."
           exit 1
+
+      # A 501 here is fine and expected until the Redis store is created; it
+      # means the function is deployed. Anything else means the API is broken.
+      - name: Check the API is answering
+        run: |
+          code=$(curl -s -o /tmp/pans.json -w '%{http_code}' "${SITE}/api/pans")
+          echo "GET /api/pans -> $code"
+          head -c 300 /tmp/pans.json; echo
+          case "$code" in
+            200|501) ;;
+            *) echo "::error::/api/pans returned $code"; exit 1 ;;
+          esac

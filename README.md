@@ -61,6 +61,15 @@ GitHub Pages cannot run the MUFG proxy. **Deploy the API once:**
 
 1. Click **Deploy** on Vercel (sign in with GitHub if asked).
 2. Wait ~1 minute for the deploy to finish.
+
+> **After a push, give Vercel a few minutes.** Vercel deploys this repo through
+> its own Git integration, and it has taken up to ~20 minutes to serve a new
+> `index.html`. GitHub Pages usually updates first, so the two URLs can disagree
+> for a while. The **Verify Vercel deployment** Action polls the Vercel URL after
+> any push that touches `index.html` or `api/`, and fails if the change never
+> goes live — so a stale site is visible instead of silent. It deploys nothing
+> and needs no secrets; if the Git integration ever gets disconnected, reconnect
+> it in the Vercel dashboard.
 3. On the GitHub Pages site, select **MUFG**, pick an IPO (or **enter Client ID manually** if the IPO is not listed yet), and click **Check All PANs**.
 
 The Pages site auto-uses `https://ipo-allotment-checker-two.vercel.app` for both
