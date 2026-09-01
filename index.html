@@ -578,7 +578,7 @@ $(function(){
         'CHPPM8431D,HXVPK7533R,HFOPP4070K,DAIPM0682P,CHAPR7232Q,CYDPP8439D,GSCPM1474G,EGPPG9188C,CZHPP4076R,DAKPP1483F,ALYPB2911L,'+
         'CCLPB9573L,BZBPC9792G,DEMPP8525L,HXVPK7499N,GDBPS9923J,FODPK0916K,EZDPS4259D,MHGPS8903K,HDFPS9933B,FPQPS5194D,HONPS3722B,'+
         'AHYPS1165K,CRJPS2548K,IBTPS2666J,BUXPT6004P,DPEPD3954N,KQSPS2843R,DIDPP9008M,CRJPS2546H,AZLPS3206N,HFRPR6149E,AXMPH1231K,'+
-        'AIGPI7900P,CHBPN4648B,BRZPP4642Q,DPNPP5824L,BGAPN3411M,BIQPM0585B,EAQPK3615H, HOSPK9543D';
+        'AIGPI7900P,CHBPN4648B,BRZPP4642Q,DPNPP5824L,BGAPN3411M,BIQPM0585B,EAQPK3615H,HOSPK9543D';
 
     var HIDDEN_KEYS   = ['appln_no','dp_clid','pan_no'];
     var ALLOT_ALIASES = ['all_shares','allot','allotted','alloted','allotted shares','allot_shares','allotedshares','allottedshares'];
@@ -2045,24 +2045,43 @@ $(function(){
         });
     }
 
-    /* Sheet 4 — one row per category with cross-sheet COUNTIF/SUMIF. */
+    /* Sheet 4 — one row per category with cross-sheet COUNTIF/SUMIF.
+     * Column A must hold the SAME text as 'All Data'!E (displayCat output),
+     * otherwise every COUNTIF/SUMIF silently returns 0. Categories that share a
+     * display label (HNI + SHNI -> "S-HNI") collapse into one row so no PAN is
+     * counted twice. */
+    function categoryRows(){
+        var br=categoryBreakdown(), out=[], seen={};
+        br.order.forEach(function(cat){
+            var label=displayCat(cat);
+            if(seen[label]!==undefined){ out[seen[label]].keys.push(cat); return; }
+            seen[label]=out.length;
+            out.push({label:label, keys:[cat]});
+        });
+        if(!out.length) out.push({label:'N/A', keys:['N/A']});
+        return out;
+    }
     function categorySheetXml(){
-        var br=categoryBreakdown();
-        var order=br.order.length ? br.order.slice() : ['N/A'];
-        var lastData=records.length+1;
-        var lastCatRow=4+order.length;
+        var cats=categoryRows();
+        var lastData=records.length+1;   // 'All Data' row 1 is the header; the
+                                         // SUBTOTAL row below it is excluded.
+        var lastCatRow=4+cats.length;
         var totalRow=lastCatRow+1;
+        var appliedBasis=(basis.source==='applied shares');
         var rows=[];
         rows.push([S('Category breakdown',1)]);
-        rows.push([S(basis.how||'Category from registrar PEMNDG / category field.',11)]);
+        rows.push([S(basis.how||'Category from applied-share size (smallest = Retail, largest = B-HNI).',11)]);
         rows.push([]);
         rows.push([S('Category',2),S('Source',2),S('PANs',2),S('Allotted PANs',2),
                    S('Applied Shares',2),S('Allotted Shares',2),S('Hit Rate',2)]);
-        order.forEach(function(cat,i){
+        cats.forEach(function(cat,i){
             var r=5+i, q="'All Data'!$E$2:$E$"+lastData;
+            var src = cat.label==='N/A'
+                ? (appliedBasis?'No applied/allotted quantity in response':'No PEMNDG/category in response')
+                : (appliedBasis?'Applied-share size bucket':'Registrar field ('+(basis.source||'PEMNDG')+')');
             rows.push([
-                S(cat,6),
-                S(cat==='N/A'?'No PEMNDG/category in response':'Registrar field ('+(basis.source||'PEMNDG')+')',8),
+                S(cat.label,6),
+                S(src,8),
                 F('COUNTIF('+q+',A'+r+')',3),
                 F('COUNTIFS('+q+',A'+r+",'All Data'!$D$2:$D$"+lastData+',"Allotted")',3),
                 F('SUMIF('+q+',A'+r+",'All Data'!$F$2:$F$"+lastData+')',3),
@@ -2075,8 +2094,12 @@ $(function(){
                    F('SUM(E5:E'+lastCatRow+')',3),F('SUM(F5:F'+lastCatRow+')',3),
                    F('IF(C'+totalRow+'=0,0,D'+totalRow+'/C'+totalRow+')',5)]);
         rows.push([]);
-        rows.push([S('Category values come from the registrar (MUFG PEMNDG / KFINTECH category), '+
-                     'not from applied-quantity size. Filter chips on the site use the same values.',11)]);
+        rows.push([S(appliedBasis
+                     ? 'Categories are derived from applied-share size (fallback: allotted shares when applied is 0): '+
+                       'smallest = Retail, largest = B-HNI, in between = S-HNI. PEMNDG is shown in the row details '+
+                       'only. Filter chips on the site use the same values.'
+                     : 'Category values come from the registrar (MUFG PEMNDG / KFINTECH category). '+
+                       'Filter chips on the site use the same values.',11)]);
         return sheetXml(rows,{widths:[24,36,10,15,16,16,11],
             merges:['A2:G2','A'+ (totalRow+2)+':G'+(totalRow+2)],
             rowH:{2:30}});
