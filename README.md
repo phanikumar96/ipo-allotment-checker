@@ -14,6 +14,24 @@ Live Site: [ipo-allotment-checker-two.vercel.app](https://ipo-allotment-checker-
 - KFINTECH (manual Client ID) or MUFG (IPO dropdown — client ID sent automatically)
 - Excel / CSV export, charts, dark mode
 
+### Filtering results
+
+The results toolbar has two chip rows — **Result** (Allotted / No Allotment / Not
+Found / Issues) and **Category** (Retail / S-HNI / B-HNI / N/A). They answer two
+different questions, so:
+
+- A plain click leaves **exactly one** filter active: picking a Category clears
+  the Result row and vice versa. Clicking the lit chip again clears it.
+- **Shift / Ctrl / Cmd-click** combines the two rows instead of replacing.
+- Every active filter shows as a pill with its own ✕, so one can be dropped
+  without clearing the rest.
+- The number on a chip is what a plain click on it actually gives you. A chip
+  with 0 is dimmed but still clickable.
+
+The IPO dropdown is an in-window panel (not the OS `<select>` popup), so long IPO
+names wrap inside the field's width instead of running off the side of the screen
+on a phone. It is keyboard-navigable and has a type-to-filter box.
+
 ## Deploy (complete app with MUFG)
 
 GitHub Pages serves the static UI only. MUFG needs the `/api/proxy` serverless function (CORS).
@@ -76,9 +94,14 @@ One-time setup:
    `index.html`, so the list starts out full rather than empty.
 
 Until this is configured the site still works — it falls back to `BASELINE_PANS`
-plus whatever is in that browser's `localStorage`, and the status line under the
-PAN chips reads **"shared list: unavailable — this device only"** so it never
-pretends an add was published.
+plus whatever is in that browser's `localStorage`. It says so rather than
+pretending an add was published, and it distinguishes the two cases:
+
+| Status line under the PAN chips | Meaning |
+|---|---|
+| ✓ `shared with everyone · N PANs` | Redis is wired up; adds reach other people |
+| • `sharing off — this device only` + `how to turn it on` | `/api/pans` answered **501**: the function is deployed but no store is attached. Not an error — the link opens the setup steps above, inline in the page. |
+| ⚠ `shared list unreachable — this device only` + `retry` | nothing answered at all |
 
 Anyone who can open the site can **add** PANs. Nobody can remove them.
 
@@ -103,8 +126,9 @@ Open http://127.0.0.1:5000/
 ## Tests
 
 ```bash
-node scripts/test-filters.js            # chip counts match the rows you get
+node scripts/test-filters.js            # chip counts match the rows a click gives; one click = one filter
 node scripts/test-category-sheet.js     # Excel "By Category" cross-sheet formulas
-node scripts/test-pans-api.js           # shared list: append-only, dedupe, order
-node scripts/test-e2e-shared-pans.js    # real Chromium: load / add / other user refreshes
+node scripts/test-pans-api.js           # shared list: append-only, dedupe, order, 501 when unconfigured
+node scripts/test-e2e-shared-pans.js    # real Chromium: load / add / other user refreshes,
+                                        # dropdown stays in the window, chips are visible, badge wording
 ```

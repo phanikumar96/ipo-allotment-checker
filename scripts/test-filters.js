@@ -1,7 +1,11 @@
-/* Reproduces the reported case: 62 PANs, 2 Allotted, 1 B-HNI, and the chips
- * claiming "Allotted 2" + "B-HNI 1" while the table shows no rows.
- * Asserts the chip counts are faceted, i.e. a chip's number always equals the
- * number of rows you get by clicking it.
+/* Filters, against the real functions lifted out of index.html.
+ *
+ * Reproduces the reported case (62 PANs, 2 Allotted, 1 B-HNI) and pins the two
+ * rules the UI now promises:
+ *   1. a chip's number equals the number of rows you get by clicking it, and
+ *   2. a plain click leaves exactly one filter active - picking a chip in one
+ *      row clears the other row, so no stale filter is left behind.
+ * Shift/Ctrl-click (additive) and the per-filter ✕ are covered too.
  * Run: node scripts/test-filters.js */
 const fs = require('fs');
 const path = require('path');
@@ -33,13 +37,23 @@ function grabVar(decl) {
 const code = [
   grabVar('var CAT_DISPLAY'), grabVar('var STATUS_TEXT'), grabVar('var CAT_PREFER'),
   grab('function displayCat('), grab('function matchesWith('), grab('function matches('),
-  grab('function facetCount('),
+  grab('function chipCount('), grab('function setFilter('),
 ].join('\n');
 
+// setFilter's only side effects are repaints, which are stubbed out; what it
+// does to fStatus/fCategory is the behaviour under test.
 const api = new Function('records', 'state', `
   var fStatus=state.fStatus, fCategory=state.fCategory, fTerm=state.fTerm;
+  function syncChips(){}
+  function render(){}
   ${code}
-  return {matches:matches, facetCount:facetCount};
+  return {
+    matches: matches,
+    chipCount: chipCount,
+    setFilter: setFilter,
+    rows: function(){ var n=0; for(var i=0;i<records.length;i++) if(matches(records[i])) n++; return n; },
+    get: function(){ return {fStatus:fStatus, fCategory:fCategory, fTerm:fTerm}; }
+  };
 `);
 
 // 62 PANs shaped like the screenshot: 37 Not Found (no quantity -> N/A),
@@ -71,46 +85,95 @@ const check = (name, cond, extra) => {
   else console.log('ok   ' + name);
 };
 
-// Baseline totals match the screenshot.
+const STATUSES = ['all', 'alloted', 'none', 'notfound', 'error'];
+const CATS = ['all', 'Retail', 'SHNI', 'BHNI', 'N/A'];
+
+/* --- baseline totals match the screenshot ------------------------------- */
 const base = api(records, { fStatus: 'all', fCategory: 'all', fTerm: '' });
-check('62 rows unfiltered', records.filter(base.matches).length === 62);
-check('Allotted = 2', base.facetCount('status', 'alloted') === 2);
-check('Not Found = 37', base.facetCount('status', 'notfound') === 37);
-check('Retail = 19', base.facetCount('category', 'Retail') === 19);
-check('S-HNI = 5', base.facetCount('category', 'SHNI') === 5);
-check('B-HNI = 1', base.facetCount('category', 'BHNI') === 1);
-check('N/A reachable = 37', base.facetCount('category', 'N/A') === 37);
+check('62 rows unfiltered', base.rows() === 62);
+check('Allotted = 2', base.chipCount('status', 'alloted') === 2);
+check('No Allotment = 23', base.chipCount('status', 'none') === 23);
+check('Not Found = 37', base.chipCount('status', 'notfound') === 37);
+check('Retail = 19', base.chipCount('category', 'Retail') === 19);
+check('S-HNI = 5', base.chipCount('category', 'SHNI') === 5);
+check('B-HNI = 1', base.chipCount('category', 'BHNI') === 1);
+check('N/A reachable = 37', base.chipCount('category', 'N/A') === 37);
 
-// The reported combination: with Allotted active, B-HNI must advertise 0.
-const allotted = api(records, { fStatus: 'alloted', fCategory: 'all', fTerm: '' });
-check('Allotted + B-HNI chip shows 0 (was 1)', allotted.facetCount('category', 'BHNI') === 0);
-check('Allotted + Retail chip shows 2', allotted.facetCount('category', 'Retail') === 2);
+/* --- a plain click leaves exactly one filter ---------------------------- */
+let a = api(records, { fStatus: 'alloted', fCategory: 'all', fTerm: '' });
+a.setFilter('category', 'BHNI', false);
+check('picking a category clears the result filter', a.get().fStatus === 'all' && a.get().fCategory === 'BHNI', a.get());
+check('...and the table is not empty', a.rows() === 1, a.rows());
 
-// With B-HNI active, the Allotted chip must advertise 0.
-const bhni = api(records, { fStatus: 'all', fCategory: 'BHNI', fTerm: '' });
-check('B-HNI + Allotted chip shows 0 (was 2)', bhni.facetCount('status', 'alloted') === 0);
-check('B-HNI + No Allotment chip shows 1', bhni.facetCount('status', 'none') === 1);
+a = api(records, { fStatus: 'all', fCategory: 'BHNI', fTerm: '' });
+a.setFilter('status', 'alloted', false);
+check('picking a result clears the category filter', a.get().fCategory === 'all' && a.get().fStatus === 'alloted', a.get());
+check('...and shows both allotted PANs', a.rows() === 2, a.rows());
 
-// The invariant that was broken: chip number == rows after clicking it.
-const statuses = ['all', 'alloted', 'none', 'notfound', 'error'];
-const cats = ['all', 'Retail', 'SHNI', 'BHNI', 'N/A'];
-let mismatches = [];
-statuses.forEach(st => cats.forEach(ct => {
-  const view = api(records, { fStatus: st, fCategory: ct, fTerm: '' });
-  const rows = records.filter(view.matches).length;
-  // count the category chip 'ct' while status 'st' is active, and vice versa
-  const fromStatusView = api(records, { fStatus: st, fCategory: 'all', fTerm: '' }).facetCount('category', ct);
-  const fromCatView = api(records, { fStatus: 'all', fCategory: ct, fTerm: '' }).facetCount('status', st);
-  if (fromStatusView !== rows) mismatches.push({ st, ct, chip: 'category', says: fromStatusView, rows });
-  if (fromCatView !== rows) mismatches.push({ st, ct, chip: 'status', says: fromCatView, rows });
+a = api(records, { fStatus: 'alloted', fCategory: 'Retail', fTerm: '' });
+a.setFilter('status', 'all', false);
+check('clicking the active chip again clears everything', a.rows() === 62, a.get());
+
+/* --- shift/ctrl-click still combines ----------------------------------- */
+a = api(records, { fStatus: 'alloted', fCategory: 'all', fTerm: '' });
+a.setFilter('category', 'Retail', false, true);
+check('additive click keeps both filters', a.get().fStatus === 'alloted' && a.get().fCategory === 'Retail', a.get());
+check('...and ANDs them', a.rows() === 2, a.rows());
+
+a = api(records, { fStatus: 'alloted', fCategory: 'all', fTerm: '' });
+a.setFilter('category', 'BHNI', false, true);
+check('additive click can still produce an empty combination', a.rows() === 0, a.rows());
+
+/* --- the ✕ on a pill drops only that filter ---------------------------- */
+a = api(records, { fStatus: 'alloted', fCategory: 'BHNI', fTerm: '' });
+a.setFilter('category', 'all', false, true);        // what dropFilter('category') does
+check('dropping the category keeps the result filter', a.get().fStatus === 'alloted' && a.rows() === 2, a.get());
+
+/* --- the invariant: the number on a chip is what clicking it gives ----- *
+ * Mirrors the two chip handlers in index.html: plain click, so the other
+ * group resets, and clicking the already-active chip clears it.           */
+function plainClick(from, kind, value) {
+  const v = api(records, from);
+  const cur = kind === 'status' ? from.fStatus : from.fCategory;
+  v.setFilter(kind, value === cur ? 'all' : value, false);
+  return v.rows();
+}
+const mismatches = [];
+STATUSES.forEach(st => CATS.forEach(ct => {
+  const from = { fStatus: st, fCategory: ct, fTerm: '' };
+  const view = api(records, from);
+  STATUSES.forEach(s => {
+    const says = view.chipCount('status', s);
+    const got = plainClick(from, 'status', s);
+    if (says !== got && s !== st) mismatches.push({ from: [st, ct], chip: 'status:' + s, says, got });
+  });
+  CATS.forEach(c => {
+    const says = view.chipCount('category', c);
+    const got = plainClick(from, 'category', c);
+    if (says !== got && c !== ct) mismatches.push({ from: [st, ct], chip: 'category:' + c, says, got });
+  });
 }));
-check('every chip count equals rows after clicking it (' + statuses.length * cats.length * 2 + ' combos)',
+check('every chip count equals the rows a click on it produces (' + STATUSES.length * CATS.length * 10 + ' clicks)',
   mismatches.length === 0, mismatches.slice(0, 5));
 
-// Search must combine with both filters.
+/* --- the handlers really do pass the modifier through ------------------ */
+check('status chips pass the additive flag', /setFilter\('status',\s*f===fStatus \? 'all' : f,\s*false,\s*addsFilter\(ev\)\)/.test(src));
+check('category chips pass the additive flag', /setFilter\('category',\s*c===fCategory \? 'all' : c,\s*false,\s*addsFilter\(ev\)\)/.test(src));
+check('shift, ctrl and cmd all combine', /shiftKey\|\|ev\.ctrlKey\|\|ev\.metaKey/.test(src));
+
+/* --- the zero-count class must not be the display:none empty-state one -- */
+check('a zero count dims a chip, it does not add class "empty"',
+  /toggleClass\('no-hits'/.test(src) && !/toggleClass\('empty'/.test(src));
+check('the empty-state rule is scoped so it cannot hide chips',
+  /#emptyState\.empty\{[^}]*display:none/.test(src) && !/^\s*\.empty\{/m.test(src));
+
+/* --- search survives a chip click and still narrows ------------------- */
 const searched = api(records, { fStatus: 'none', fCategory: 'SHNI', fTerm: 'pan0' });
 check('search narrows within filters',
   records.filter(searched.matches).every(r => r.status === 'none' && r.category === 'SHNI' && /pan0/i.test(r.pan)));
+const withTerm = api(records, { fStatus: 'all', fCategory: 'all', fTerm: 'pan04' });
+check('chip counts respect the search box',
+  withTerm.chipCount('status', 'all') === records.filter(r => /pan04/i.test(r.pan)).length);
 
 console.log(fail ? '\n' + fail + ' failure(s)' : '\nall checks passed');
 process.exit(fail ? 1 : 0);
