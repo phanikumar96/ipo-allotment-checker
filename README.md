@@ -47,6 +47,38 @@ GitHub Pages cannot run the MUFG proxy. **Deploy the API once:**
 
 The site auto-uses `https://ipo-allotment-checker.vercel.app/api/proxy` for MUFG PAN checks.
 
+### 3. Shared PAN list (required for the list to be shared)
+
+The PAN list lives in Redis behind `/api/pans`, so everyone opening the site sees
+the same PANs and a PAN one person adds shows up for everyone else on their next
+refresh. **It is append-only: nothing is ever deleted server-side.** "Remove" on a
+chip only hides that PAN in the browser that clicked it.
+
+One-time setup:
+
+1. Create a free Redis database — either **Vercel → Storage → Upstash Redis**
+   (env vars are injected automatically) or a free database at
+   [upstash.com](https://upstash.com).
+2. If you created it at Upstash directly, add these to
+   **Vercel → Project → Settings → Environment Variables**:
+
+   | Name | Value |
+   |------|-------|
+   | `UPSTASH_REDIS_REST_URL` | REST URL from the Upstash console |
+   | `UPSTASH_REDIS_REST_TOKEN` | REST token from the Upstash console |
+
+   (`KV_REST_API_URL` / `KV_REST_API_TOKEN` are also accepted, which is what
+   Vercel's own KV integration sets.)
+3. Redeploy. On first load the site seeds the store with `BASELINE_PANS` from
+   `index.html`, so the list starts out full rather than empty.
+
+Until this is configured the site still works — it falls back to `BASELINE_PANS`
+plus whatever is in that browser's `localStorage`, and the status line under the
+PAN chips reads **"shared list: unavailable — this device only"** so it never
+pretends an add was published.
+
+Anyone who can open the site can **add** PANs. Nobody can remove them.
+
 ### Local development
 
 ```bash
@@ -61,3 +93,15 @@ Open http://127.0.0.1:5000/
 |--------|------|---------|
 | GET | `/api/proxy?action=ipos` | Live MUFG IPO list |
 | POST | `/api/proxy` | PAN search — `{ "clientid", "PAN" }` |
+| GET | `/api/pans` | Shared PAN list — `{ "pans": [...], "count": n }` |
+| POST | `/api/pans` | Add PANs — `{ "pans": ["ABCDE1234F", ...] }`, returns the merged list. Invalid PANs are dropped; duplicates keep their original position. |
+| DELETE | `/api/pans` | **405** — the shared list is append-only by design |
+
+## Tests
+
+```bash
+node scripts/test-filters.js            # chip counts match the rows you get
+node scripts/test-category-sheet.js     # Excel "By Category" cross-sheet formulas
+node scripts/test-pans-api.js           # shared list: append-only, dedupe, order
+node scripts/test-e2e-shared-pans.js    # real Chromium: load / add / other user refreshes
+```

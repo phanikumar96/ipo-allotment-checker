@@ -198,6 +198,8 @@
         .filter-btn{background:var(--card);color:var(--text);border:1px solid var(--field-border);padding:8px 12px;
             font-size:13px;white-space:nowrap;min-height:38px}
         .filter-btn.active{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
+        /* Faceted count of 0: still clickable, but visibly a dead end. */
+        .filter-btn.empty:not(.active){opacity:.42}
         .filter-btn .count{opacity:.8;margin-left:5px;font-variant-numeric:tabular-nums}
         .search-wrap{position:relative;flex:1 1 220px;min-width:180px}
         .search-wrap #clearSearch{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;
@@ -347,10 +349,11 @@
                 <div class="chips-head">
                     <b id="panCountHint">0 PANs saved</b>
                     <span id="panSaveState" class="save-state">saved on this device</span>
+                    <span id="panSyncState" class="save-state" title="The shared list every visitor sees">shared list: checking…</span>
                     <span class="spacer"></span>
                     <a href="#" id="expandChips">show all</a>
+                    <a href="#" id="syncPans" title="Fetch PANs other people have added since this page loaded">refresh shared</a>
                     <a href="#" id="loadSample">load sample</a>
-                    <a href="#" id="copyGlobal" title="Copy the whole list as the GLOBAL_PANS block to paste into index.html">copy for sharing</a>
                     <a href="#" id="copyPans">copy all</a>
                     <a href="#" id="clearPans">clear all</a>
                 </div>
@@ -516,11 +519,12 @@
                 <button type="button" class="filter-btn" data-filter="notfound">Not Found <span class="count" id="notfoundFilterCount">0</span></button>
                 <button type="button" class="filter-btn" data-filter="error">Issues <span class="count" id="errorFilterCount">0</span></button>
             </div>
-            <div class="chips" id="categoryChips" role="toolbar" aria-label="Filter by Retail, S-HNI, B-HNI">
-                <button type="button" class="filter-btn active" data-category="all" aria-pressed="true">Any</button>
+            <div class="chips" id="categoryChips" role="toolbar" aria-label="Filter by Retail, S-HNI, B-HNI, N/A">
+                <button type="button" class="filter-btn active" data-category="all" aria-pressed="true">Any <span class="count" id="catAnyCount">0</span></button>
                 <button type="button" class="filter-btn" data-category="Retail" aria-pressed="false">Retail <span class="count" id="catRetailCount">0</span></button>
                 <button type="button" class="filter-btn" data-category="SHNI" aria-pressed="false">S-HNI <span class="count" id="catShniCount">0</span></button>
                 <button type="button" class="filter-btn" data-category="BHNI" aria-pressed="false">B-HNI <span class="count" id="catBhniCount">0</span></button>
+                <button type="button" class="filter-btn" data-category="N/A" aria-pressed="false" title="No applied or allotted quantity yet, so no category could be derived">N/A <span class="count" id="catNaCount">0</span></button>
             </div>
             <div class="search-wrap">
                 <input type="text" id="searchBox" inputmode="search" autocomplete="off" placeholder="Search PAN, name or result…">
@@ -561,24 +565,24 @@ $(function(){
      * Constants & state
      * ------------------------------------------------------------------ */
     /* ================================================================== *
-     * GLOBAL_PANS — the shared list. Everyone who opens this URL sees these.
+     * The shared list lives in Redis behind /api/pans and is APPEND-ONLY.
      *
-     * This is a static site: there is no server, so the only list that can be
-     * shared is the one committed here. To publish PANs, use "copy for sharing"
-     * under the PAN chips, paste the result over this whole block, and push —
-     * the Pages workflow redeploys and every visitor picks the list up.
+     * On load the page GETs it, so a PAN anyone adds shows up for everyone else
+     * on their next refresh. Adds are POSTed straight away. Nothing is ever
+     * deleted server-side; "remove" only hides a PAN in the browser that asked.
      *
-     * PANs added in the browser stay in that browser's localStorage until they
-     * are committed here, and are shown as "yours (not shared)".
+     * BASELINE_PANS is the fallback when /api/pans is unreachable (plain static
+     * hosting, offline, or the Redis env vars not set yet) and is also seeded
+     * into the shared list on first successful load, so a brand new store
+     * starts out with the list below rather than empty.
      * ================================================================== */
-    var GLOBAL_PANS = '';
-
-    var SAMPLE = 'FQBPB9804F,BMZPA6693P,CYTPB2872G,CVKPB7858Q,BHAPB0203L,CARPB6323C,AILPC3522E,ANIPC9866D,BYMPC4052R,FBLPD9361N,'+
+    var BASELINE_PANS = 'FQBPB9804F,BMZPA6693P,CYTPB2872G,CVKPB7858Q,BHAPB0203L,CARPB6323C,AILPC3522E,ANIPC9866D,BYMPC4052R,FBLPD9361N,'+
         'EBSPD6697F,ASSPY9039R,BFIPG8993Q,AEOPI0638A,DXJPK5910A,BEPPC3861K,CKCPK0625H,UCNPS3050P,PXDPK8074B,DYAPR3659P,GSQPK6065P,'+
         'CHPPM8431D,HXVPK7533R,HFOPP4070K,DAIPM0682P,CHAPR7232Q,CYDPP8439D,GSCPM1474G,EGPPG9188C,CZHPP4076R,DAKPP1483F,ALYPB2911L,'+
         'CCLPB9573L,BZBPC9792G,DEMPP8525L,HXVPK7499N,GDBPS9923J,FODPK0916K,EZDPS4259D,MHGPS8903K,HDFPS9933B,FPQPS5194D,HONPS3722B,'+
         'AHYPS1165K,CRJPS2548K,IBTPS2666J,BUXPT6004P,DPEPD3954N,KQSPS2843R,DIDPP9008M,CRJPS2546H,AZLPS3206N,HFRPR6149E,AXMPH1231K,'+
         'AIGPI7900P,CHBPN4648B,BRZPP4642Q,DPNPP5824L,BGAPN3411M,BIQPM0585B,EAQPK3615H,HOSPK9543D';
+    var SAMPLE = BASELINE_PANS;          // "load sample" re-adds the baseline
 
     var HIDDEN_KEYS   = ['appln_no','dp_clid','pan_no'];
     var ALLOT_ALIASES = ['all_shares','allot','allotted','alloted','allotted shares','allot_shares','allotedshares','allottedshares'];
@@ -596,7 +600,7 @@ $(function(){
                        error:'status-error', queued:'status-queued', loading:'status-loading'};
     var STATUS_ORDER = {alloted:0, none:1, notfound:2, error:3, queued:4};
     var CAT_DISPLAY  = {SHNI:'S-HNI', BHNI:'B-HNI', RETAIL:'Retail', HNI:'S-HNI'};
-    var CAT_FILTERS  = ['Retail','SHNI','BHNI'];
+    var CAT_FILTERS  = ['Retail','SHNI','BHNI','N/A'];
 
     var records = [];          // one entry per result row
     var extraCols = [];        // dynamic columns discovered from the API payload
@@ -887,11 +891,13 @@ $(function(){
         animateNum($('#totalAppliedSharesEl'),stats.applied);
         animateNum($('#totalAllottedSharesEl'),stats.allotted);
         animateNum($('#allotRateEl'),stats.rate,'%',1);
-        $('#allCount').text(stats.total);
-        $('#allotedCount').text(stats.alloted);
-        $('#noneCount').text(stats.none);
-        $('#notfoundFilterCount').text(stats.notfound);
-        $('#errorFilterCount').text(stats.error);
+        // Chip counts are faceted (they honour the other active filter); the KPI
+        // cards above stay absolute, since they describe the whole run.
+        $('#allCount').text(facetCount('status','all'));
+        $('#allotedCount').text(facetCount('status','alloted'));
+        $('#noneCount').text(facetCount('status','none'));
+        $('#notfoundFilterCount').text(facetCount('status','notfound'));
+        $('#errorFilterCount').text(facetCount('status','error'));
         renderCategoryChips();
         $('#totalRowCount').text(stats.total);
         $('#retryBtn').toggleClass('hidden', !(stats.error>0) || running);
@@ -910,10 +916,11 @@ $(function(){
         return {order:order, counts:counts};
     }
     function renderCategoryChips(){
-        var data=categoryBreakdown();
-        $('#catRetailCount').text(data.counts.Retail||0);
-        $('#catShniCount').text(data.counts.SHNI||0);
-        $('#catBhniCount').text(data.counts.BHNI||0);
+        $('#catAnyCount').text(facetCount('category','all'));
+        $('#catRetailCount').text(facetCount('category','Retail'));
+        $('#catShniCount').text(facetCount('category','SHNI'));
+        $('#catBhniCount').text(facetCount('category','BHNI'));
+        $('#catNaCount').text(facetCount('category','N/A'));
         if(fCategory!=='all' && CAT_FILTERS.indexOf(fCategory)<0) fCategory='all';
         syncChips();
     }
@@ -1045,14 +1052,27 @@ $(function(){
         });
         return list;
     }
-    function matches(rec){
-        if(fStatus!=='all' && rec.status!==fStatus) return false;
-        if(fCategory!=='all' && rec.category!==fCategory) return false;
-        if(!fTerm) return true;
+    // One predicate, parameterised, so the chip counts can ask "how many rows
+    // would show if THIS chip were the only thing that changed?" without
+    // duplicating the filter rules.
+    function matchesWith(rec,status,cat,term){
+        if(status!=='all' && rec.status!==status) return false;
+        if(cat!=='all' && (rec.category||'N/A')!==cat) return false;
+        if(!term) return true;
         var hay=[rec.pan, STATUS_TEXT[rec.status], displayCat(rec.category), rec.category, rec.name, rec.message,
                  rec.applied, rec.allotted].join(' ');
         if(rec.item) hay+=' '+Object.keys(rec.item).map(function(k){ return rec.item[k]; }).join(' ');
-        return hay.toLowerCase().indexOf(fTerm)>=0;
+        return hay.toLowerCase().indexOf(term)>=0;
+    }
+    function matches(rec){ return matchesWith(rec,fStatus,fCategory,fTerm); }
+    // Count for one chip: every other active filter still applies, so a chip
+    // never advertises rows that clicking it would not actually show.
+    function facetCount(kind,value){
+        var st = kind==='status'   ? value : fStatus;
+        var ct = kind==='category' ? value : fCategory;
+        var n=0;
+        for(var i=0;i<records.length;i++) if(matchesWith(records[i],st,ct,fTerm)) n++;
+        return n;
     }
     function render(){
         renderQueued=false;
@@ -1061,23 +1081,32 @@ $(function(){
         $('#resultsTable tbody').html(visible.map(rowHtml).join(''));
         $('#visibleCount').text(visible.length);
         paintActiveFilters(visible.length);
+        // paintEmptyState owns the message (it offers a Clear-filters link);
+        // only visibility is decided here.
         paintEmptyState();
-        $('#emptyState').toggle(visible.length===0)
-            .html(records.length ? 'No rows match the selected filter or search.'
-                                : 'Nothing to show yet — enter PANs above and tap <b>Check All PANs</b>.');
+        $('#emptyState').toggle(visible.length===0);
         $('.card[data-filter]').attr('aria-pressed',function(){ return $(this).data('filter')===fStatus; });
         paintStats();
         paintBasis();
         renderChips();
         drawDonut(); drawBars();
     }
+    // Says which combination came up empty, because "no rows" on its own reads
+    // like a broken filter when the real answer is "no PAN is both of these".
     function paintEmptyState(){
         var filtered = fStatus!=='all' || fCategory!=='all' || !!fTerm;
-        $('#emptyState').html(!records.length
-            ? 'Nothing to show yet — add PANs above and tap <b>Check All PANs</b>.'
-            : (filtered
-                ? 'No rows match the current filters. <a href="#" id="clearFiltersEmpty">Clear filters</a>'
-                : 'Nothing to show yet — add PANs above and tap <b>Check All PANs</b>.'));
+        if(!records.length || !filtered){
+            $('#emptyState').html('Nothing to show yet — add PANs above and tap <b>Check All PANs</b>.');
+            return;
+        }
+        var bits=[];
+        if(fStatus!=='all')   bits.push('<b>'+esc(STATUS_TEXT[fStatus]||fStatus)+'</b>');
+        if(fCategory!=='all') bits.push('<b>'+esc(displayCat(fCategory))+'</b>');
+        var why = bits.length===2 ? 'No PAN is both '+bits[0]+' and '+bits[1]+'.'
+                : bits.length===1 ? 'No PAN is '+bits[0]+(fTerm?' and matches the search.':'.')
+                : 'Nothing matches the search.';
+        if(bits.length===2 && fTerm) why='No PAN is both '+bits[0]+' and '+bits[1]+' and matches the search.';
+        $('#emptyState').html(why+' <a href="#" id="clearFiltersEmpty">Clear filters</a>');
     }
     $(document).on('click','#clearFiltersEmpty',function(e){ e.preventDefault(); clearFilters(); render(); });
     function paintActiveFilters(shown){
@@ -1307,12 +1336,20 @@ $(function(){
     function syncChips(){
         $('#statusChips .filter-btn').each(function(){
             var on=String($(this).attr('data-filter'))===(fStatus||'all');
-            $(this).toggleClass('active',on).attr('aria-pressed',on?'true':'false');
+            $(this).toggleClass('active',on).attr('aria-pressed',on?'true':'false')
+                   .toggleClass('empty', chipCountOf(this)===0);
         });
         $('#categoryChips .filter-btn').each(function(){
             var on=String($(this).attr('data-category'))===(fCategory||'all');
-            $(this).toggleClass('active',on).attr('aria-pressed',on?'true':'false');
+            $(this).toggleClass('active',on).attr('aria-pressed',on?'true':'false')
+                   .toggleClass('empty', chipCountOf(this)===0);
         });
+    }
+    // Reads the count already painted into the chip, so "empty" can never
+    // disagree with the number next to it.
+    function chipCountOf(el){
+        var $c=$(el).find('.count');
+        return $c.length ? (parseInt($c.text(),10)||0) : 1;
     }
     function setFilter(kind,value,scroll){
         if(kind==='category') fCategory=value||'all';
@@ -2452,14 +2489,19 @@ $(function(){
     var PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 
     /* Three lists make up what is on screen:
-     *   sharedPans - from GLOBAL_PANS, identical for every visitor
-     *   localPans  - added in this browser, not shared until committed
-     *   hiddenPans - shared PANs this browser has removed for itself
-     * panList is the merge of the three and is what the rest of the app uses. */
-    var sharedPans = splitPans(GLOBAL_PANS);
+     *   sharedPans - the append-only list from /api/pans, same for every visitor
+     *   localPans  - added here but not yet acknowledged by the server
+     *   hiddenPans - shared PANs this browser has hidden for itself only
+     * panList is the merge of the three and is what the rest of the app uses.
+     *
+     * sharedPans starts from the cached copy of the last successful fetch (so a
+     * refresh shows the full list immediately, before the network answers) and
+     * falls back to BASELINE_PANS the very first time. */
+    var sharedPans = loadJson('sharedPans',null) || splitPans(BASELINE_PANS);
     var localPans  = loadLocalPans();
     var hiddenPans = loadJson('hiddenPans',[]);
     var panList    = [];
+    var sharedOk   = false;          // has a GET /api/pans ever succeeded?
     rebuildList();
 
     function loadJson(key,fallback){
@@ -2480,7 +2522,7 @@ $(function(){
     }
     function isShared(pan){ return sharedPans.indexOf(pan)>=0; }
     function rebuildList(){
-        // Anything that has since been committed to GLOBAL_PANS stops counting
+        // Anything the shared list has accepted stops counting
         // as "yours", so the local list empties itself once a push lands.
         localPans = localPans.filter(function(p){ return !isShared(p); });
         var out=[], seen={};
@@ -2503,6 +2545,103 @@ $(function(){
                           .toggleClass('err',!saved);
         return saved;
     }
+    /* ---- shared list (append-only, /api/pans) ------------------------ */
+    var pansBase='';                 // endpoint that last answered, reused for POST
+
+    // Same host resolution as the MUFG proxy, so a custom proxy URL or the
+    // GitHub Pages -> Vercel hop keeps working without a second setting.
+    function pansEndpoints(){
+        var out=[], seen={};
+        mugProxyCandidates().forEach(function(u){
+            var e=String(u).replace(/\/api\/proxy\/?$/,'/api/pans');
+            if(e===u && !/\/api\/pans$/.test(e)) return;   // not a proxy-shaped URL
+            if(!seen[e]){ seen[e]=1; out.push(e); }
+        });
+        if(!out.length) out.push('/api/pans');
+        return out;
+    }
+    function setSyncState(text,bad){
+        $('#panSyncState').text('shared list: '+text).toggleClass('err',!!bad);
+    }
+    async function fetchShared(){
+        var eps=pansEndpoints(), lastErr=null;
+        for(var i=0;i<eps.length;i++){
+            try{
+                var r=await fetch(eps[i],{headers:{Accept:'application/json'}});
+                var j=await r.json().catch(function(){ return null; });
+                if(!r.ok || !j) throw new Error((j&&j.error)||('HTTP '+r.status));
+                if(!Array.isArray(j.pans)) throw new Error('unexpected response');
+                pansBase=eps[i];
+                return j.pans;
+            }catch(e){ lastErr=e; }
+        }
+        throw lastErr || new Error('no endpoint reachable');
+    }
+    async function pushShared(pans){
+        var r=await fetch(pansBase||pansEndpoints()[0],{
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({pans:pans})
+        });
+        var j=await r.json().catch(function(){ return null; });
+        if(!r.ok || !j || !Array.isArray(j.pans)) throw new Error((j&&j.error)||('HTTP '+r.status));
+        return j;
+    }
+    // Adopt a list from the server as the new shared baseline and cache it, so
+    // the next load paints the full list before the network answers.
+    function applyShared(list){
+        sharedPans=list.slice();
+        store.set('sharedPans',JSON.stringify(sharedPans));
+        savePans();            // re-merges: anything now shared leaves localPans
+        renderChips();
+    }
+    // Runs at boot and on "refresh shared".
+    async function syncShared(quiet){
+        try{
+            var remote=await fetchShared();
+            sharedOk=true;
+            var have={}, missing=[];
+            remote.forEach(function(p){ have[p]=1; });
+            // Seed a brand-new store from the baseline, and hand up anything this
+            // browser is still holding locally so everyone else can see it too.
+            if(!remote.length){
+                splitPans(BASELINE_PANS).forEach(function(p){ if(!have[p]) missing.push(p); });
+            }
+            localPans.forEach(function(p){
+                if(!have[p] && PAN_RE.test(p) && missing.indexOf(p)<0) missing.push(p);
+            });
+            if(missing.length){
+                var res=await pushShared(missing);
+                if(res && Array.isArray(res.pans)) remote=res.pans;
+            }
+            applyShared(remote);
+            setSyncState(sharedPans.length+' PANs, everyone sees these');
+            if(!quiet) toast(sharedPans.length+' PANs in the shared list');
+            return true;
+        }catch(e){
+            sharedOk=false;
+            // The cached/baseline list is already on screen; say so plainly
+            // rather than pretending the add was published.
+            setSyncState('unavailable — this device only',true);
+            if(!quiet) toast('Shared list unreachable: '+(e.message||e),'err');
+            return false;
+        }
+    }
+    // Publish just-added PANs. Fire-and-forget: they are already saved locally,
+    // so a network failure delays sharing but never loses them.
+    async function shareNewPans(pans){
+        var valid=pans.filter(function(p){ return PAN_RE.test(p); });
+        if(!valid.length) return;
+        if(!sharedOk){ setSyncState('unavailable — '+valid.length+' not shared yet',true); return; }
+        setSyncState('saving '+valid.length+' PAN'+(valid.length===1?'':'s')+'…');
+        try{
+            var res=await pushShared(valid);
+            applyShared(res.pans);
+            setSyncState(sharedPans.length+' PANs, everyone sees these');
+        }catch(e){
+            setSyncState('could not save — '+(e.message||e),true);
+        }
+    }
+
     function splitPans(text){
         var out=[], seen={};
         String(text||'').split(/[^A-Za-z0-9]+/).forEach(function(s){
@@ -2528,6 +2667,7 @@ $(function(){
         var saved=savePans();
         renderChips();
         if(fresh.length) flashChip(fresh[fresh.length-1]);
+        if(fresh.length) shareNewPans(fresh);
         if(!quiet){
             var bits=[];
             if(fresh.length) bits.push(fresh.length+' added'+(saved?' and saved':' but NOT saved'));
@@ -2602,9 +2742,9 @@ $(function(){
                 var shared=isShared(p);
                 var cls=[PAN_RE.test(p)?'':'bad', chipState(p), shared?'':'local'].filter(Boolean).join(' ');
                 var title=!PAN_RE.test(p) ? 'Does not look like a valid PAN'
-                        : (shared ? 'Shared — everyone opening this link sees it'
-                                  : 'Added on this device only — use “copy for sharing” to publish it');
-                var rm=shared ? 'Hide '+p+' on this device' : 'Remove '+p;
+                        : (shared ? 'In the shared list — everyone opening this link sees it'
+                                  : 'On this device only — not published to the shared list yet');
+                var rm=shared ? 'Hide '+p+' on this device (the shared list keeps it)' : 'Remove '+p;
                 return '<span class="chip '+cls+'" role="listitem" data-pan="'+esc(p)+'">'+
                        '<button type="button" class="txt" title="'+esc(title)+'">'+esc(p)+
                        (shared?'':'<span aria-hidden="true"> •</span>')+'</button>'+
@@ -2702,25 +2842,10 @@ $(function(){
     $('#loadSample').on('click',function(e){
         e.preventDefault(); addPans(SAMPLE);
     });
-    // Emits the exact GLOBAL_PANS block to paste back into this file, so the
-    // list can actually become shared. 11 per line, matching the file's style.
-    function globalPansBlock(){
-        if(!panList.length) return "    var GLOBAL_PANS = '';";
-        var lines=[], i;
-        for(i=0;i<panList.length;i+=11) lines.push(panList.slice(i,i+11).join(','));
-        var NL=String.fromCharCode(10);
-        return "    var GLOBAL_PANS ="+NL+lines.map(function(l,n){
-            return "        '"+l+(n===lines.length-1?"';":",'+");
-        }).join(NL);
-    }
-    $('#copyGlobal').on('click',function(e){
+    $('#syncPans').on('click',function(e){
         e.preventDefault();
-        if(!panList.length){ toast('No PANs to share','err'); return; }
-        copyText(globalPansBlock(),
-            panList.length+' PANs copied — paste over the GLOBAL_PANS block in index.html and push');
-        addMsg('Paste the copied block over the "var GLOBAL_PANS = ..." line in index.html, '+
-               'then commit and push. GitHub Actions redeploys and everyone on the URL gets these '+
-               panList.length+' PANs.','ok');
+        setSyncState('checking…');
+        syncShared(false);
     });
     $('#copyPans').on('click',function(e){
         e.preventDefault();
@@ -2751,6 +2876,9 @@ $(function(){
 
     refreshAll();
     setBusy(false,'Ready — '+(getClientId()?'':'select an IPO / enter a Client ID, then ')+'tap Check All PANs.','');
+    // Pull the shared list last, so the cached/baseline PANs are already on
+    // screen and the fetch only ever adds to what is shown.
+    syncShared(true);
 });
 </script>
 </body>
