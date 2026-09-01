@@ -1445,8 +1445,11 @@ $(function(){
         var out=[], isPages=/\.github\.io$/i.test(location.hostname);
         if(custom && !(isPages && custom==='/api/proxy')) out.push(custom.split('?')[0]);
         if(isPages){
+            // Pages cannot run the functions, so hop to the Vercel deployment.
+            // Tried in order; "-two" is the one actually live, the bare name is
+            // kept in case the project is ever aliased back to it.
+            out.push('https://ipo-allotment-checker-two.vercel.app/api/proxy');
             out.push('https://ipo-allotment-checker.vercel.app/api/proxy');
-            out.push('https://ipo-allotment-checker.pages.dev/api/proxy');
             out.push('https://ipo-allotment-checker-api.onrender.com/api/proxy');
         } else {
             out.push('/api/proxy');

@@ -45,7 +45,10 @@ GitHub Pages cannot run the MUFG proxy. **Deploy the API once:**
 2. Wait ~1 minute for the deploy to finish.
 3. On the GitHub Pages site, select **MUFG**, pick an IPO (or **enter Client ID manually** if the IPO is not listed yet), and click **Check All PANs**.
 
-The site auto-uses `https://ipo-allotment-checker.vercel.app/api/proxy` for MUFG PAN checks.
+The Pages site auto-uses `https://ipo-allotment-checker-two.vercel.app` for both
+`/api/proxy` (MUFG PAN checks) and `/api/pans` (shared list). If you rename the
+Vercel project, update the candidate list in `mugProxyCandidates()` in
+`index.html`, or just paste the new URL into **Advanced → CORS proxy prefix**.
 
 ### 3. Shared PAN list (required for the list to be shared)
 
