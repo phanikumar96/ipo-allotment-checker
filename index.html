@@ -1,0 +1,3182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="format-detection" content="telephone=no">
+    <title>IPO Allotment Status</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <style>
+        :root{
+            --bg:#f4f6fa; --bg2:#eef2f8; --card:#fff; --text:#182230; --muted:#667085;
+            --border:#e4e7ec; --line:#eaecf0; --field:#fff; --field-border:#d0d5dd;
+            --primary:#2563eb; --primary-soft:#eff6ff; --primary-ink:#fff;
+            --success:#067647; --success-bg:#ecfdf3; --success-br:#abefc6;
+            --warning:#b54708; --warning-bg:#fffaeb; --warning-br:#fedf89;
+            --danger:#b42318;  --danger-bg:#fef3f2;  --danger-br:#fecdca;
+            --neutral:#475467; --neutral-bg:#f2f4f7;
+            --shadow:0 2px 8px rgba(16,24,40,.05);
+            --shadow-lg:0 12px 32px rgba(16,24,40,.14);
+            --tap:44px;
+        }
+        html[data-theme="dark"]{
+            --bg:#0f141b; --bg2:#141b24; --card:#161d26; --text:#e7ecf3; --muted:#96a2b4;
+            --border:#26313d; --line:#232d38; --field:#0f151d; --field-border:#33404f;
+            --primary:#4f8cff; --primary-soft:#16233a; --primary-ink:#08111f;
+            --success:#5fe3a1; --success-bg:#0f2a1f; --success-br:#1d5138;
+            --warning:#fdb022; --warning-bg:#2a1f0d; --warning-br:#5a3f12;
+            --danger:#ff8577;  --danger-bg:#2b1512;  --danger-br:#5c2620;
+            --neutral:#aab6c6; --neutral-bg:#1c242e;
+            --shadow:0 2px 10px rgba(0,0,0,.35);
+            --shadow-lg:0 14px 36px rgba(0,0,0,.5);
+        }
+        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+        html,body{overflow-x:hidden;-webkit-text-size-adjust:100%}
+        body{
+            font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+            max-width:1250px;margin:0 auto;background:var(--bg);color:var(--text);
+            padding:16px max(14px,env(safe-area-inset-left)) calc(20px + env(safe-area-inset-bottom));
+            transition:background .2s,color .2s;
+        }
+        h1{margin:0;font-size:clamp(19px,4.6vw,27px);letter-spacing:-.02em}
+        .subtitle{color:var(--muted);font-size:13px;margin-top:3px}
+        .app-bar{display:flex;align-items:center;gap:12px;padding:8px 0 14px;position:relative}
+        .app-bar .brand{width:38px;height:38px;flex:0 0 38px;border-radius:11px;background:linear-gradient(135deg,var(--primary),#7c3aed);
+            display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px}
+        .app-bar .spacer{flex:1}
+        .icon-btn{width:var(--tap);height:var(--tap);min-width:var(--tap);border-radius:11px;background:var(--card);
+            border:1px solid var(--border);color:var(--text);display:grid;place-items:center;font-size:17px;padding:0}
+
+        .panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+        label{font-weight:600;font-size:13px;display:block;margin:10px 0 6px}
+        input,button,textarea,select{font-family:inherit}
+        input,textarea,select{font-size:16px} /* 16px stops iOS zoom-on-focus */
+        input:not([type=radio]):not([type=checkbox]),textarea,select{
+            width:100%;padding:11px 12px;border:1px solid var(--field-border);border-radius:10px;
+            background:var(--field);color:var(--text);outline:none;min-height:var(--tap)}
+        input:focus,textarea:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.16)}
+        textarea{resize:vertical;line-height:1.5;font-size:15px}
+        button{cursor:pointer;border:0;border-radius:10px;padding:11px 15px;font-weight:600;font-size:14px;
+            background:var(--primary);color:var(--primary-ink);min-height:var(--tap);transition:transform .08s,filter .15s,box-shadow .15s}
+        button:active{transform:scale(.97)}
+        button:disabled{opacity:.5;cursor:not-allowed}
+        button.secondary{background:var(--card);color:var(--text);border:1px solid var(--field-border)}
+        button.danger{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-br)}
+        button.ghost{background:transparent;color:var(--primary);border:1px dashed var(--field-border)}
+
+        .top-grid{display:grid;grid-template-columns:1fr 300px;gap:16px}
+        .client-types{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 2px}
+        .seg{flex:1;min-width:110px;position:relative}
+        .seg input{position:absolute;opacity:0;pointer-events:none}
+        .seg span{display:flex;align-items:center;justify-content:center;min-height:var(--tap);border:1px solid var(--field-border);
+            border-radius:10px;font-weight:600;font-size:14px;background:var(--field);cursor:pointer}
+        .seg input:checked + span{background:var(--primary-soft);border-color:var(--primary);color:var(--primary)}
+        .seg input:focus-visible + span{box-shadow:0 0 0 3px rgba(37,99,235,.25)}
+        .hint{color:var(--muted);font-size:12px;margin-top:5px;line-height:1.6}
+
+        /* --- dropdown that stays inside the window --------------------- *
+         * A native <select> popup is drawn by the OS: it sizes itself to the
+         * longest option and can spill past the viewport. This keeps the real
+         * <select> as the value holder and paints a panel that is pinned to the
+         * field's own width, so long IPO names wrap instead of overflowing. */
+        .combo{position:relative}
+        .combo>select.combo-native{position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;
+            pointer-events:none;min-height:0;padding:0;border:0;margin:0}
+        .combo-btn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:var(--field);
+            color:var(--text);border:1px solid var(--field-border);border-radius:10px;padding:11px 12px;
+            min-height:var(--tap);font-size:16px;font-weight:400}
+        .combo-btn .val{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .combo-btn .caret{flex:0 0 auto;color:var(--muted);font-size:10px;line-height:1}
+        .combo-btn[aria-expanded=true]{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.16)}
+        .combo.is-placeholder .combo-btn .val{color:var(--muted)}
+        .combo-pop{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:60;background:var(--card);
+            border:1px solid var(--border);border-radius:12px;box-shadow:0 14px 40px rgba(16,24,40,.24);
+            padding:8px;display:none}
+        .combo.open .combo-pop{display:block}
+        .combo.up .combo-pop{top:auto;bottom:calc(100% + 6px)}
+        .combo-pop .combo-search input{font-size:14px;padding:9px 10px;min-height:38px;margin-bottom:7px}
+        .combo-list{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+        .combo-opt{display:block;width:100%;text-align:left;background:none;border:0;color:var(--text);
+            padding:9px 10px;border-radius:8px;font-size:13.5px;font-weight:500;line-height:1.45;
+            min-height:38px;white-space:normal;overflow-wrap:anywhere}
+        .combo-opt:hover,.combo-opt.cursor{background:var(--bg2)}
+        .combo-opt.sel{background:var(--primary-soft);color:var(--primary);font-weight:700}
+        .combo-opt.ph{color:var(--muted);font-weight:400}
+        .combo-none{color:var(--muted);font-size:12.5px;padding:8px 10px}
+
+        /* --- PAN chips ------------------------------------------------ */
+        .add-row{display:flex;gap:8px}
+        .add-row input{flex:1 1 auto;min-width:0;font-variant-numeric:tabular-nums;letter-spacing:.06em;text-transform:uppercase}
+        .add-row button{flex:0 0 auto;white-space:nowrap}
+        .add-msg{font-size:12px;margin-top:5px;min-height:16px;color:var(--muted)}
+        .add-msg.err{color:var(--danger)} .add-msg.ok{color:var(--success)}
+        .chips-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 7px;font-size:12px;color:var(--muted)}
+        .chips-head .spacer{flex:1}
+        .chips-head a{color:var(--primary);text-decoration:none;border-bottom:1px dotted currentColor}
+        .save-state{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;
+            padding:2px 8px;border-radius:999px;background:var(--success-bg);color:var(--success);
+            border:1px solid var(--success-br)}
+        .save-state::before{content:'✓'}
+        .save-state.err{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-br)}
+        .save-state.err::before{content:'⚠'}
+        /* "not set up yet" is not a failure — it must not look like one. */
+        .save-state.info{background:var(--bg2);color:var(--muted);border-color:var(--field-border)}
+        .save-state.info::before{content:'•'}
+        .save-state.busy{background:var(--bg2);color:var(--muted);border-color:var(--field-border)}
+        .save-state.busy::before{content:'…'}
+        .save-state a{color:inherit;font-weight:700;border-bottom:1px dotted currentColor;text-decoration:none}
+        #shareSetup{margin:0 0 8px;padding:11px 13px;border-radius:11px;font-size:12.5px;line-height:1.65;
+            background:var(--bg2);border:1px solid var(--field-border);color:var(--text)}
+        #shareSetup b{color:var(--primary)}
+        #shareSetup ol{margin:6px 0 0;padding-left:20px}
+        #shareSetup code{background:var(--field);border:1px solid var(--field-border);border-radius:5px;
+            padding:1px 5px;font-size:11.5px}
+        #shareSetup .close{float:right;background:none;border:0;color:var(--muted);padding:0 2px;min-height:0;font-size:15px}
+        /* scoped to #panChips: .chips is also the filter-row class in the results panel */
+        #panChips{display:flex;flex-wrap:wrap;gap:7px;max-height:210px;overflow-y:auto;padding:9px;
+            border:1px solid var(--field-border);border-radius:11px;background:var(--field);
+            -webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+        #panChips.expanded{max-height:none}
+        .chips-empty{color:var(--muted);font-size:12.5px;padding:6px 2px}
+        #panChips .chip{display:inline-flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:999px;
+            background:var(--card);overflow:hidden;max-width:100%}
+        #panChips .chip .txt{padding:7px 4px 7px 11px;font-size:13px;font-weight:600;letter-spacing:.05em;
+            font-variant-numeric:tabular-nums;white-space:nowrap;background:none;border:0;color:var(--text);
+            min-height:34px;line-height:1;cursor:pointer}
+        #panChips .chip .x{padding:0 9px;min-height:34px;min-width:28px;background:none;border:0;color:var(--muted);
+            font-size:15px;line-height:1;border-left:1px solid var(--line);border-radius:0}
+        #panChips .chip .x:hover{background:var(--danger-bg);color:var(--danger)}
+        #panChips .chip.local{border-style:dashed;border-color:var(--primary)}
+        #panChips .chip.local .txt{color:var(--primary)}
+        #panChips .chip.bad{border-color:var(--danger-br);background:var(--danger-bg)}
+        #panChips .chip.bad .txt{color:var(--danger)}
+        #panChips .chip.hit{border-color:var(--success-br);background:var(--success-bg)}
+        #panChips .chip.hit .txt{color:var(--success)}
+        #panChips .chip.miss{opacity:.75}
+        #panChips .chip.flash{animation:chipflash .8s ease}
+        @keyframes chipflash{0%{box-shadow:0 0 0 0 rgba(37,99,235,.55)}100%{box-shadow:0 0 0 12px rgba(37,99,235,0)}}
+
+        /* --- category basis explainer --------------------------------- */
+        .basis{margin-top:12px;padding:11px 13px;border-radius:11px;font-size:12.5px;line-height:1.6;
+            background:var(--primary-soft);border:1px solid var(--border);color:var(--text)}
+        .basis b{color:var(--primary)}
+        #activeFilters{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+        #activeFilters .tagf{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+            background:var(--primary-soft);border:1px solid var(--primary);color:var(--primary);font-weight:600}
+        #activeFilters .tagf .drop{background:none;border:0;color:inherit;padding:0 0 0 2px;margin:0;
+            min-height:0;min-width:0;font-size:13px;line-height:1;opacity:.75;font-weight:700}
+        #activeFilters .tagf .drop:hover{opacity:1}
+        #activeFilters a{color:var(--danger);text-decoration:none;border-bottom:1px dotted currentColor;font-weight:600}
+        .cat-flag{display:inline-grid;place-items:center;width:18px;height:18px;margin-left:6px;border-radius:50%;
+            background:var(--warning-bg);border:1px solid var(--warning-br);color:var(--warning);
+            font-size:11px;font-weight:800;cursor:help;vertical-align:middle}
+        .hint a{color:var(--primary);text-decoration:none;border-bottom:1px dotted currentColor}
+        code{background:var(--neutral-bg);border-radius:5px;padding:1px 5px;font-size:11.5px}
+        .row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+        .row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+        @media(max-width:620px){.row-3{grid-template-columns:1fr}}
+
+        .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+        .actions button{flex:1 1 auto}
+        details.adv{margin-top:12px;border:1px dashed var(--border);border-radius:11px;padding:0 12px}
+        details.adv > summary{cursor:pointer;font-weight:600;font-size:13px;padding:12px 0;color:var(--muted);list-style:none}
+        details.adv > summary::-webkit-details-marker{display:none}
+        details.adv > summary::before{content:'▸ ';display:inline-block;transition:transform .15s}
+        details.adv[open] > summary::before{content:'▾ '}
+        details.adv .body{padding-bottom:12px}
+
+        #processingMessage{font-weight:600;background:var(--neutral-bg);color:var(--muted);padding:11px 13px;
+            border-radius:10px;margin-top:12px;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        #processingMessage.busy{background:var(--primary-soft);color:var(--primary)}
+        #processingMessage.done{background:var(--success-bg);color:var(--success)}
+        #processingMessage.warn{background:var(--warning-bg);color:var(--warning)}
+        .spinner{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;
+            animation:spin .7s linear infinite;flex:0 0 14px}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .progress{height:8px;background:var(--neutral-bg);border-radius:99px;overflow:hidden;margin-top:9px}
+        #progressBar{height:100%;width:0;background:linear-gradient(90deg,var(--primary),#7c3aed);transition:width .25s}
+
+        .banner{display:none;margin-top:12px;padding:12px 13px;border-radius:11px;font-size:13px;line-height:1.5;
+            background:var(--warning-bg);border:1px solid var(--warning-br);color:var(--warning)}
+        .banner b{display:block;margin-bottom:3px}
+
+        .dashboard{display:grid;grid-template-columns:1fr 260px;gap:14px;align-items:start;margin-bottom:14px}
+        .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+        .card{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card);
+            text-align:left;transition:.15s;min-height:74px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+        .card[data-filter]{cursor:pointer}
+        .card[data-filter]:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+        .card[data-filter][aria-pressed=true]{outline:2px solid var(--primary);outline-offset:1px}
+        .card .num{font-size:clamp(18px,4.5vw,22px);font-weight:800;display:block;line-height:1.15;font-variant-numeric:tabular-nums}
+        .card .lbl{font-size:11.5px;color:var(--muted);font-weight:600}
+        .card.alloted{background:var(--success-bg);border-color:var(--success-br)}
+        .card.alloted .num{color:var(--success)}
+        .card.none{background:var(--neutral-bg)}
+        .card.notfound{background:var(--warning-bg);border-color:var(--warning-br)}
+        .card.notfound .num{color:var(--warning)}
+        .card.errors{background:var(--danger-bg);border-color:var(--danger-br)}
+        .card.errors .num{color:var(--danger)}
+        .card.shares{background:var(--primary-soft)}
+        .card.rate{background:var(--warning-bg)}
+
+        .chart-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;box-shadow:var(--shadow)}
+        .chart-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+        .chart-head .section-title{margin:0;text-align:left;flex:1}
+        .chart-head select{width:auto;min-width:104px;font-size:13px;padding:7px 9px;min-height:36px}
+        .section-title,.chart-box h3{font-size:13px;margin:0 0 8px;font-weight:700;letter-spacing:.01em}
+        canvas{max-width:100%;display:block}
+        #summaryChart{margin:0 auto;cursor:pointer}
+        #donutLegend{font-size:12px;margin-top:6px}
+        .legend-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:8px;cursor:pointer;text-align:left}
+        .legend-item:hover{background:var(--neutral-bg)}
+        .legend-item .dot{width:9px;height:9px;border-radius:3px;flex:0 0 9px}
+        .legend-item .lv{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums}
+        .chart-wrap{position:relative;overflow-x:auto;-webkit-overflow-scrolling:touch}
+        #barChart{min-width:100%}
+        #chartTip{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--text);color:var(--bg);
+            font-size:12px;padding:6px 9px;border-radius:8px;white-space:nowrap;transform:translate(-50%,-130%);z-index:5;font-weight:600}
+
+        .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+        /* A horizontal scroller measures as ~0 wide inside a flex row, so the
+         * chips used to be squashed to nothing whenever the toolbar ran out of
+         * space. Each chip row now owns a full line of the toolbar and scrolls
+         * sideways within it. */
+        .chips{display:flex;gap:7px;flex:1 1 100%;min-width:0;overflow-x:auto;padding-bottom:2px;
+            scrollbar-width:none;-webkit-overflow-scrolling:touch}
+        .chips::-webkit-scrollbar{display:none}
+        .chips .filter-btn{flex:0 0 auto}
+        /* The two rows are different questions ("which result?", "which size?").
+         * Labelling them stops a still-lit chip in the other row reading as a
+         * filter that failed to clear. The label lives inside the scroller (a
+         * wrapper around it measures as zero-width in a flex toolbar) and sticks
+         * to the left edge so it survives sideways scrolling on a phone. */
+        .chips .cg-label{position:sticky;left:0;z-index:1;flex:0 0 auto;align-self:center;
+            background:var(--card);padding-right:3px;font-size:10.5px;text-transform:uppercase;
+            letter-spacing:.05em;color:var(--muted);font-weight:700;white-space:nowrap}
+        .filter-btn{background:var(--card);color:var(--text);border:1px solid var(--field-border);padding:8px 12px;
+            font-size:13px;white-space:nowrap;min-height:38px}
+        .filter-btn.active{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
+        /* Count of 0: still clickable, but visibly a dead end. NOT called
+         * "empty" - that is the global empty-state class, which is
+         * display:none, and it used to hide every chip whose count was 0
+         * (i.e. all of them, before a check has been run). */
+        .filter-btn.no-hits:not(.active){opacity:.42}
+        .filter-btn .count{opacity:.8;margin-left:5px;font-variant-numeric:tabular-nums}
+        .search-wrap{position:relative;flex:1 1 220px;min-width:180px}
+        .search-wrap #clearSearch{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;
+            min-height:32px;min-width:32px;padding:0;border-radius:8px;background:transparent;color:var(--muted);display:none}
+        #searchBox{padding-right:40px}
+        .toolbar select{width:auto;min-width:170px}
+
+        .table-wrap{overflow:auto;max-height:min(70vh,640px);border:1px solid var(--border);border-radius:12px;background:var(--card);
+            -webkit-overflow-scrolling:touch}
+        table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px;margin:0;min-width:820px}
+        th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;vertical-align:middle}
+        thead th{background:var(--bg2);position:sticky;top:0;z-index:2;color:var(--muted);font-size:11.5px;
+            text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;cursor:pointer;user-select:none}
+        thead th:hover{color:var(--primary)}
+        thead th .arrow{opacity:.35;margin-left:4px}
+        thead th.sorted{color:var(--primary)}
+        thead th.sorted .arrow{opacity:1}
+        tbody tr:last-child td{border-bottom:0}
+        tbody tr.data-row:hover{background:var(--bg2)}
+        tr.is-allotted{background:linear-gradient(90deg,var(--success-bg),transparent 60%)}
+        tr.flash{animation:flash 1.4s ease-out}
+        @keyframes flash{0%{background:var(--warning-bg)}100%{background:transparent}}
+        td.idx{width:64px;white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums}
+        .details-btn{width:26px;height:26px;min-height:26px;min-width:26px;padding:0;border-radius:7px;font-size:11px;
+            background:var(--card);color:var(--muted);border:1px solid var(--field-border);margin-left:6px;line-height:1}
+        tr.open .details-btn{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
+        .pan-cell{font-weight:700;letter-spacing:.04em;white-space:nowrap}
+        .pan-cell button{background:none;border:0;padding:2px 4px;margin-left:2px;color:var(--muted);font-size:12px;
+            min-height:0;font-weight:400;border-radius:6px}
+        .pan-cell button:hover{color:var(--primary);background:var(--primary-soft)}
+        .num-cell{text-align:right;font-variant-numeric:tabular-nums}
+        .status-pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+        .status-allotted{background:var(--success-bg);color:var(--success)}
+        .status-none{background:var(--neutral-bg);color:var(--neutral)}
+        .status-notfound{background:var(--warning-bg);color:var(--warning)}
+        .status-error{background:var(--danger-bg);color:var(--danger)}
+        .status-loading,.status-queued{background:var(--primary-soft);color:var(--primary)}
+        .category-pill{display:inline-flex;align-items:center;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+        .category-retail{background:#eff8ff;color:#175cd3}
+        .category-shni{background:#f4f3ff;color:#5925dc}
+        .category-bhni{background:var(--danger-bg);color:var(--danger)}
+        .category-na{background:var(--neutral-bg);color:var(--neutral)}
+        html[data-theme=dark] .category-retail{background:#122036;color:#8ab4ff}
+        html[data-theme=dark] .category-shni{background:#1d1735;color:#c0aaff}
+
+        .detail-row td{background:var(--bg2);color:var(--text);padding:12px}
+        .detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+        .detail-item{padding:9px;background:var(--card);border:1px solid var(--border);border-radius:9px;word-break:break-word}
+        .detail-item b{display:block;font-size:10.5px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+        .detail-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+        .detail-actions button{padding:7px 11px;font-size:12px;min-height:36px}
+        /* Scoped to the one element that wants it: as a bare `.empty` this
+         * display:none leaked onto anything else that used the word. */
+        #emptyState.empty{padding:34px 16px;text-align:center;color:var(--muted);display:none;font-size:14px}
+        .footer-tools{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;color:var(--muted);font-size:12px;flex-wrap:wrap}
+
+        #toTop{position:fixed;right:calc(14px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));
+            width:46px;height:46px;border-radius:50%;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.2s;z-index:40;padding:0}
+        #toTop.show{opacity:1;pointer-events:auto}
+        #toastHost{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));
+            z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center;width:max-content;max-width:92vw}
+        .toast{background:var(--text);color:var(--bg);padding:11px 15px;border-radius:11px;font-size:13px;font-weight:600;
+            box-shadow:var(--shadow-lg);animation:pop .2s ease-out}
+        .toast.ok{background:var(--success);color:#fff}
+        .toast.err{background:var(--danger);color:#fff}
+        @keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+        .hidden{display:none!important}
+        .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+        @media(max-width:980px){
+            .top-grid,.dashboard{grid-template-columns:1fr}
+            .cards{grid-template-columns:repeat(4,1fr)}
+        }
+        @media(max-width:760px){
+            body{padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}
+            .panel{padding:13px;border-radius:13px}
+            .cards{grid-template-columns:repeat(2,1fr)}
+            .toolbar select{width:100%;min-width:0}
+            .search-wrap{flex:1 1 100%}
+
+            /* Table becomes stacked cards: no nested scroll traps, no 820px overflow */
+            .table-wrap{max-height:none;overflow:visible;border:0;background:transparent;border-radius:0}
+            table{min-width:0;font-size:13.5px}
+            thead{display:none}
+            tbody,tr,td{display:block;width:auto}
+            tbody tr.data-row{background:var(--card);border:1px solid var(--border);border-radius:13px;
+                margin-bottom:10px;padding:6px 4px;box-shadow:var(--shadow)}
+            tbody tr.data-row.is-allotted{border-color:var(--success-br)}
+            tbody tr.data-row td{border-bottom:1px dashed var(--line);padding:9px 10px;display:flex;
+                justify-content:space-between;align-items:center;gap:12px;text-align:right}
+            tbody tr.data-row td:last-child{border-bottom:0}
+            tbody tr.data-row td::before{content:attr(data-label);font-weight:700;font-size:11px;color:var(--muted);
+                text-transform:uppercase;letter-spacing:.04em;text-align:left;flex:0 0 auto}
+            tbody tr.data-row td.blank{display:none}
+            tbody tr.data-row.open{margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0}
+            td.idx{width:auto}
+            tr.detail-row{display:block;margin:0 0 10px}
+            tr.detail-row td{display:block;text-align:left;border:1px solid var(--border);border-top:0;
+                border-radius:0 0 13px 13px}
+            tr.detail-row td::before{content:none}
+            .detail-grid{grid-template-columns:1fr 1fr}
+
+            #panChips{max-height:172px;padding:8px;gap:6px}
+            #panChips .chip .txt{font-size:12.5px;padding:7px 3px 7px 10px}
+            .basis{font-size:12px}
+            /* the flag sits next to the pill, so keep the row from wrapping oddly */
+            tbody tr.data-row td[data-label="Category"]{align-items:center}
+        }
+        @media(max-width:420px){
+            .cards{grid-template-columns:1fr 1fr}
+            .actions button{flex:1 1 100%}
+            .detail-grid{grid-template-columns:1fr}
+            .add-row{flex-wrap:wrap}
+            .add-row input,.add-row button{flex:1 1 100%}
+            .chips-head{gap:8px;font-size:11.5px}
+        }
+        /* laptops: 4 KPI cards across without squeezing the chart column */
+        @media(min-width:981px) and (max-width:1180px){
+            .dashboard{grid-template-columns:1fr 222px}
+            .card{padding:10px;min-height:68px}
+        }
+        @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+    </style>
+</head>
+<body>
+    <div class="app-bar">
+        <div class="brand">IPO</div>
+        <div>
+            <h1>IPO Allotment Status</h1>
+            <div class="subtitle">Check many PANs at once and export a ready-to-use workbook.</div>
+        </div>
+        <div class="spacer"></div>
+        <button id="themeToggle" class="icon-btn secondary" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+    </div>
+
+    <noscript><div class="panel">This tool needs JavaScript enabled.</div></noscript>
+
+    <div class="panel">
+        <div class="top-grid">
+            <div>
+                <label for="panAdd">Add a PAN</label>
+                <div class="add-row">
+                    <input id="panAdd" type="text" inputmode="text" autocapitalize="characters" autocomplete="off"
+                        spellcheck="false" maxlength="120" placeholder="ABCDE1234F — press Enter or ＋">
+                    <button id="panAddBtn" type="button" title="Add PAN to the list" aria-label="Add PAN to the list">＋ Add</button>
+                </div>
+                <div id="panAddMsg" class="add-msg" role="status" aria-live="polite"></div>
+
+                <div class="chips-head">
+                    <b id="panCountHint">0 PANs saved</b>
+                    <span id="panSaveState" class="save-state hidden">saved on this device</span>
+                    <span id="panSyncState" class="save-state busy" title="The shared list every visitor sees">checking shared list…</span>
+                    <span class="spacer"></span>
+                    <a href="#" id="expandChips">show all</a>
+                    <a href="#" id="syncPans" title="Fetch PANs other people have added since this page loaded">refresh shared</a>
+                    <a href="#" id="loadSample">load sample</a>
+                    <a href="#" id="copyPans">copy all</a>
+                    <a href="#" id="clearPans">clear all</a>
+                </div>
+                <div id="shareSetup" class="hidden">
+                    <button type="button" class="close" id="shareSetupClose" aria-label="Hide these steps">✕</button>
+                    <b>Sharing is off, so this PAN list lives in this browser only.</b>
+                    Everything works — but a PAN you add here will not show up for anyone else.
+                    To turn sharing on (free, one-time, ~2 minutes):
+                    <ol>
+                        <li>Open your Vercel project → <b>Storage</b> → create an <b>Upstash Redis</b> database
+                            (or a free one at <a href="https://upstash.com" target="_blank" rel="noopener">upstash.com</a>).</li>
+                        <li>If you created it at Upstash, add <code>UPSTASH_REDIS_REST_URL</code> and
+                            <code>UPSTASH_REDIS_REST_TOKEN</code> under <b>Settings → Environment Variables</b>.</li>
+                        <li>Redeploy, then reload this page — the list seeds itself and becomes shared.</li>
+                    </ol>
+                </div>
+                <div id="panChips" role="list" aria-label="Saved PANs">
+                    <div class="chips-empty">No PANs yet — add one above, paste a list, or load the sample.</div>
+                </div>
+
+                <details class="adv bulk">
+                    <summary>Paste a list of PANs</summary>
+                    <div class="body">
+                        <textarea id="panInput" rows="3" inputmode="text" autocapitalize="characters" spellcheck="false"
+                            placeholder="ABCDE1234F, FGHIJ5678K — comma, space, semicolon or new-line separated"></textarea>
+                        <div class="actions" style="margin-top:8px">
+                            <button id="panBulkAdd" class="secondary" type="button">Add these to the list</button>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            <div>
+                <label>Client Type</label>
+                <div class="client-types">
+                    <label class="seg"><input type="radio" name="clientType" value="FINTECH" checked><span>KFINTECH</span></label>
+                    <label class="seg"><input type="radio" name="clientType" value="MUG"><span>MUFG</span></label>
+                </div>
+                <div id="fintechClientWrap">
+                    <label for="clientId">Company's Client ID</label>
+                    <input id="clientId" type="text" autocomplete="off" spellcheck="false" placeholder="Enter client ID">
+                </div>
+                <div id="mugIpoWrap" class="hidden">
+                    <label for="mugIpoSelect">IPO</label>
+                    <select id="mugIpoSelect" aria-label="Select MUFG IPO">
+                        <option value="">Select an IPO</option>
+                    </select>
+                    <div class="hint" id="mugIpoHint">Choose the IPO — the company's client ID is sent automatically.</div>
+                    <label for="mugClientId" style="margin-top:12px">Or enter Client ID manually</label>
+                    <input id="mugClientId" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"
+                        placeholder="e.g. 11926 — use if IPO is not in the list yet">
+                    <div class="hint">Manual ID overrides the dropdown. Find it on the MUFG allotment page for your IPO.</div>
+                    <div id="mugApiBanner" class="basis hidden" style="margin-top:10px;background:var(--warning-bg);border-color:var(--warning-br)">
+                        <b>MUFG PAN checks need a free API proxy</b> (GitHub Pages is static only).
+                        <a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Deploy on Vercel</a>
+                        — one-time, ~2 minutes — then click <b>Retry failed</b>.
+                    </div>
+                </div>
+                <div class="hint">Retail / S-HNI / B-HNI use <b>applied shares</b> for both MUFG and KFINTECH:
+                    smallest = Retail, largest = B-HNI, anything in between = S-HNI. Tap a chip to filter.
+                    The Category column shows that bucket.</div>
+            </div>
+        </div>
+
+        <div id="basisNote" class="basis hidden"></div>
+
+        <div class="actions">
+            <button id="fetchBtn" type="button">Check All PANs</button>
+            <button id="cancelBtn" class="danger hidden" type="button">Stop</button>
+            <button id="retryBtn" class="secondary hidden" type="button">Retry failed</button>
+            <button id="exportExcel" class="secondary" type="button">⬇ Excel workbook</button>
+            <button id="exportCsv" class="secondary" type="button">⬇ CSV</button>
+            <button id="clearResults" class="secondary" type="button">Clear</button>
+        </div>
+
+        <details class="adv">
+            <summary>Advanced &amp; troubleshooting</summary>
+            <div class="body">
+                <div class="row-2">
+                    <div>
+                        <label for="speedSelect">Requests at a time</label>
+                        <select id="speedSelect">
+                            <option value="1">1 — safest</option>
+                            <option value="4">4 — balanced</option>
+                            <option value="8" selected>8 — fastest</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="lotSize">Lot size (shares)</label>
+                        <input id="lotSize" type="number" min="0" step="1" inputmode="numeric"
+                            autocomplete="off" placeholder="auto-detected">
+                    </div>
+                </div>
+                <div class="hint" style="margin-top:9px">
+                    Leave lot size blank to auto-detect. Category chips (Retail / S-HNI / B-HNI) always use applied-share size for both registrars.
+                </div>
+                <div class="row-2" style="margin-top:10px">
+                    <div>
+                        <label for="mugUrl">MUFG endpoint</label>
+                        <input id="mugUrl" type="text" spellcheck="false" value="/api/proxy">
+                    </div>
+                    <div>
+                        <label for="fintechUrl">KFINTECH endpoint</label>
+                        <input id="fintechUrl" type="text" spellcheck="false"
+                            value="https://0uz601ms56.execute-api.ap-south-1.amazonaws.com/prod/api/query?type=pan">
+                    </div>
+                </div>
+                <div style="margin-top:10px">
+                    <label for="proxyUrl">CORS proxy prefix (optional)</label>
+                    <input id="proxyUrl" type="text" spellcheck="false" autocomplete="off"
+                        placeholder="https://your-proxy.example/?url=">
+                </div>
+                <div class="hint" style="margin-top:9px">
+                    Needed only when this page is served from a host the registrar's API does not allow — a
+                    <b>GitHub Pages</b> site, for example. The registrar URL is appended to whatever you put here.
+                    Leave it blank when the page and the API share a host.
+                </div>
+                <div class="hint" style="margin-top:9px">
+                    MUFG needs the <code>/api/proxy</code> serverless function (see <code>api/proxy.py</code>). Deploy the
+                    whole repo to <b>Vercel</b> for same-origin <code>/api/proxy</code>, or host the page on
+                    <b>GitHub Pages</b> and set the MUFG endpoint above to your Vercel URL
+                    (e.g. <code>https://your-app.vercel.app/api/proxy</code>). On a phone, use <b>https</b> — not
+                    <code>file://</code> — or the browser blocks API calls.
+                </div>
+                <div class="hint" style="margin-top:6px">Shortcuts: <b>Ctrl/⌘+Enter</b> run · <b>/</b> search · <b>Esc</b> clear search.</div>
+            </div>
+        </details>
+
+        <div id="processingMessage" role="status" aria-live="polite">Ready.</div>
+        <div class="progress"><div id="progressBar"></div></div>
+        <div id="netBanner" class="banner"></div>
+    </div>
+
+    <div class="dashboard">
+        <div class="cards">
+            <div class="card" data-filter="all" role="button" tabindex="0" aria-pressed="true"><span class="num" id="appliedCount">0</span><span class="lbl">Total PANs</span></div>
+            <div class="card alloted" data-filter="alloted" role="button" tabindex="0" aria-pressed="false"><span class="num" id="posCount">0</span><span class="lbl">Allotted</span></div>
+            <div class="card none" data-filter="none" role="button" tabindex="0" aria-pressed="false"><span class="num" id="zeroCount">0</span><span class="lbl">No Allotment</span></div>
+            <div class="card notfound" data-filter="notfound" role="button" tabindex="0" aria-pressed="false"><span class="num" id="notFoundCount">0</span><span class="lbl">Not Found</span></div>
+            <div class="card errors" data-filter="error" role="button" tabindex="0" aria-pressed="false"><span class="num" id="errorCount">0</span><span class="lbl">Issues</span></div>
+            <div class="card shares"><span class="num" id="totalAppliedSharesEl">0</span><span class="lbl">Shares Applied</span></div>
+            <div class="card shares"><span class="num" id="totalAllottedSharesEl">0</span><span class="lbl">Shares Allotted</span></div>
+            <div class="card rate"><span class="num" id="allotRateEl">0.0%</span><span class="lbl">Allotment Rate</span></div>
+        </div>
+        <div class="chart-box">
+            <div class="chart-head"><h3 class="section-title">Result Summary</h3></div>
+            <div class="chart-wrap">
+                <canvas id="summaryChart" width="200" height="200" role="img" aria-label="Result summary donut chart"></canvas>
+            </div>
+            <div id="donutLegend"></div>
+        </div>
+    </div>
+
+    <div class="panel" id="barChartWrap">
+        <div class="chart-head">
+            <div class="section-title">Shares Allotted per PAN</div>
+            <select id="topNSelect" aria-label="How many rows to chart">
+                <option value="0" selected>All allotted PANs</option>
+                <option value="10">Top 10</option>
+                <option value="25">Top 25</option>
+                <option value="50">Top 50</option>
+                <option value="100">Top 100</option>
+            </select>
+        </div>
+        <div class="chart-wrap">
+            <canvas id="barChart" height="60"></canvas>
+            <div id="chartTip"></div>
+        </div>
+    </div>
+
+    <div class="panel" id="resultsSection">
+        <div class="toolbar">
+            <div class="chips" id="statusChips" role="toolbar" aria-label="Filter by result">
+                <span class="cg-label" aria-hidden="true" title="Filter by result. Picking one clears the category filter — shift-click to keep both.">Result</span>
+                <button type="button" class="filter-btn active" data-filter="all">All <span class="count" id="allCount">0</span></button>
+                <button type="button" class="filter-btn" data-filter="alloted">Allotted <span class="count" id="allotedCount">0</span></button>
+                <button type="button" class="filter-btn" data-filter="none">No Allotment <span class="count" id="noneCount">0</span></button>
+                <button type="button" class="filter-btn" data-filter="notfound">Not Found <span class="count" id="notfoundFilterCount">0</span></button>
+                <button type="button" class="filter-btn" data-filter="error">Issues <span class="count" id="errorFilterCount">0</span></button>
+            </div>
+            <div class="chips" id="categoryChips" role="toolbar" aria-label="Filter by Retail, S-HNI, B-HNI, N/A">
+                <span class="cg-label" aria-hidden="true" title="Filter by application size. Picking one clears the result filter — shift-click to keep both.">Category</span>
+                <button type="button" class="filter-btn active" data-category="all" aria-pressed="true">Any <span class="count" id="catAnyCount">0</span></button>
+                <button type="button" class="filter-btn" data-category="Retail" aria-pressed="false">Retail <span class="count" id="catRetailCount">0</span></button>
+                <button type="button" class="filter-btn" data-category="SHNI" aria-pressed="false">S-HNI <span class="count" id="catShniCount">0</span></button>
+                <button type="button" class="filter-btn" data-category="BHNI" aria-pressed="false">B-HNI <span class="count" id="catBhniCount">0</span></button>
+                <button type="button" class="filter-btn" data-category="N/A" aria-pressed="false" title="No applied or allotted quantity yet, so no category could be derived">N/A <span class="count" id="catNaCount">0</span></button>
+            </div>
+            <div class="search-wrap">
+                <input type="text" id="searchBox" inputmode="search" autocomplete="off" placeholder="Search PAN, name or result…">
+                <button type="button" id="clearSearch" aria-label="Clear search">✕</button>
+            </div>
+            <select id="sortSelect" aria-label="Sort results">
+                <option value="no:1">Sort: Input order</option>
+                <option value="status:1">Sort: Status</option>
+                <option value="pan:1">Sort: PAN (A→Z)</option>
+                <option value="allotted:-1">Sort: Shares allotted (high→low)</option>
+                <option value="applied:-1">Sort: Shares applied (high→low)</option>
+                <option value="category:1">Sort: Category</option>
+            </select>
+            <button type="button" id="toggleAllDetails" class="secondary">Expand all</button>
+            <button type="button" id="copyAllotted" class="secondary">Copy allotted PANs</button>
+        </div>
+
+        <div class="table-wrap">
+            <table id="resultsTable">
+                <thead><tr></tr></thead>
+                <tbody></tbody>
+            </table>
+            <div id="emptyState" class="empty">Nothing to show yet — enter PANs above and tap <b>Check All PANs</b>.</div>
+        </div>
+        <div class="footer-tools">
+            <span>Showing <b id="visibleCount">0</b> of <b id="totalRowCount">0</b> rows</span>
+            <span id="activeFilters" class="hidden"></span>
+            <span>Tip: tap the ⌄ button (or double-click a row) for full response details.</span>
+        </div>
+    </div>
+
+    <button id="toTop" type="button" aria-label="Back to top">↑</button>
+    <div id="toastHost" aria-live="polite"></div>
+
+<script>
+$(function(){
+    /* ------------------------------------------------------------------ *
+     * Constants & state
+     * ------------------------------------------------------------------ */
+    /* ================================================================== *
+     * The shared list lives in Redis behind /api/pans and is APPEND-ONLY.
+     *
+     * On load the page GETs it, so a PAN anyone adds shows up for everyone else
+     * on their next refresh. Adds are POSTed straight away. Nothing is ever
+     * deleted server-side; "remove" only hides a PAN in the browser that asked.
+     *
+     * BASELINE_PANS is the fallback when /api/pans is unreachable (plain static
+     * hosting, offline, or the Redis env vars not set yet) and is also seeded
+     * into the shared list on first successful load, so a brand new store
+     * starts out with the list below rather than empty.
+     * ================================================================== */
+    var BASELINE_PANS = 'FQBPB9804F,BMZPA6693P,CYTPB2872G,CVKPB7858Q,BHAPB0203L,CARPB6323C,AILPC3522E,ANIPC9866D,BYMPC4052R,FBLPD9361N,'+
+        'EBSPD6697F,ASSPY9039R,BFIPG8993Q,AEOPI0638A,DXJPK5910A,BEPPC3861K,CKCPK0625H,UCNPS3050P,PXDPK8074B,DYAPR3659P,GSQPK6065P,'+
+        'CHPPM8431D,HXVPK7533R,HFOPP4070K,DAIPM0682P,CHAPR7232Q,CYDPP8439D,GSCPM1474G,EGPPG9188C,CZHPP4076R,DAKPP1483F,ALYPB2911L,'+
+        'CCLPB9573L,BZBPC9792G,DEMPP8525L,HXVPK7499N,GDBPS9923J,FODPK0916K,EZDPS4259D,MHGPS8903K,HDFPS9933B,FPQPS5194D,HONPS3722B,'+
+        'AHYPS1165K,CRJPS2548K,IBTPS2666J,BUXPT6004P,DPEPD3954N,KQSPS2843R,DIDPP9008M,CRJPS2546H,AZLPS3206N,HFRPR6149E,AXMPH1231K,'+
+        'AIGPI7900P,CHBPN4648B,BRZPP4642Q,DPNPP5824L,BGAPN3411M,BIQPM0585B,EAQPK3615H,HOSPK9543D';
+    var SAMPLE = BASELINE_PANS;          // "load sample" re-adds the baseline
+
+    var HIDDEN_KEYS   = ['appln_no','dp_clid','pan_no'];
+    var ALLOT_ALIASES = ['all_shares','allot','allotted','alloted','allotted shares','allot_shares','allotedshares','allottedshares'];
+    var APPL_ALIASES  = ['app_shares','shares','applied_shares','appshares','applied shares','app shares','appliedshares',
+                         'no_of_shares','nof_shares','appliedqty','app_qty','qty'];
+    // Registrar category field — MUFG uses PEMNDG; KFINTECH commonly uses category/catg.
+    var CAT_ALIASES   = ['pemndg','pem_ndg','category','catg','investor_category','appl_category',
+                         'application_category','inv_category','cat','category_name'];
+    var CAT_PREFER    = ['Retail','HNI','S-HNI','SHNI','B-HNI','BHNI','NII','QIB','Employee','Anchor'];
+
+    // Registrar codes sent to the API, and the names shown to people.
+    var REGISTRAR_LABEL = {FINTECH:'KFINTECH', MUG:'MUFG'};
+    var STATUS_TEXT = {alloted:'Allotted', none:'No Allotment', notfound:'Not Found', error:'Issue', queued:'Not Checked'};
+    var STATUS_CLS  = {alloted:'status-allotted', none:'status-none', notfound:'status-notfound',
+                       error:'status-error', queued:'status-queued', loading:'status-loading'};
+    var STATUS_ORDER = {alloted:0, none:1, notfound:2, error:3, queued:4};
+    var CAT_DISPLAY  = {SHNI:'S-HNI', BHNI:'B-HNI', RETAIL:'Retail', HNI:'S-HNI'};
+    var CAT_FILTERS  = ['Retail','SHNI','BHNI','N/A'];
+
+    var records = [];          // one entry per result row
+    var extraCols = [];        // dynamic columns discovered from the API payload
+    var seqNo = 0;             // display numbering
+    var openIds = {};          // record ids whose detail panel is expanded
+    var sort = {key:'no', dir:1};
+    var fStatus = 'all', fCategory = 'all', fTerm = '';
+    var stats = blankStats();
+    var running = false, cancelled = false, activeXhr = [], connFailures = 0;
+    var renderQueued = false;
+
+    function blankStats(){
+        return {total:0, alloted:0, none:0, notfound:0, error:0, queued:0,
+                applied:0, allotted:0, rate:0, cat:{}};
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Small helpers
+     * ------------------------------------------------------------------ */
+    var store = {
+        ok:true,   // false when the browser blocks storage (private mode, some file:// setups)
+        get:function(k,d){ try{ var v=localStorage.getItem('ipo:'+k); return v===null?d:v; }catch(e){ store.ok=false; return d; } },
+        set:function(k,v){
+            try{
+                localStorage.setItem('ipo:'+k,v);
+                if(localStorage.getItem('ipo:'+k)!==String(v)) store.ok=false;
+            }catch(e){ store.ok=false; }
+            return store.ok;
+        }
+    };
+    function esc(s){ return $('<div>').text(s===undefined||s===null?'':String(s)).html(); }
+    function parseNum(raw){
+        if(raw===undefined||raw===null) return 0;
+        return Number(String(raw).replace(/[^0-9.-]/g,'')) || 0;
+    }
+    function nf(n){ try{ return Number(n).toLocaleString('en-IN'); }catch(e){ return String(n); } }
+    function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+    function toast(msg,kind){
+        var $t=$('<div class="toast">').addClass(kind||'').text(msg).appendTo('#toastHost');
+        setTimeout(function(){ $t.fadeOut(200,function(){ $t.remove(); }); }, 2400);
+    }
+    function copyText(text,okMsg){
+        var done=function(){ toast(okMsg||'Copied','ok'); };
+        if(navigator.clipboard && navigator.clipboard.writeText){
+            navigator.clipboard.writeText(text).then(done,fallback);
+        } else fallback();
+        function fallback(){
+            var ta=document.createElement('textarea');
+            ta.value=text; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.top='-1000px';
+            document.body.appendChild(ta); ta.select();
+            try{ document.execCommand('copy'); done(); }catch(e){ toast('Copy failed','err'); }
+            ta.remove();
+        }
+    }
+    function lookup(obj,key){
+        if(!obj) return '';
+        if(obj[key]!==undefined) return obj[key];
+        var lk=String(key).toLowerCase();
+        for(var k in obj){ if(Object.prototype.hasOwnProperty.call(obj,k) && k.toLowerCase()===lk) return obj[k]; }
+        return '';
+    }
+    function pickValue(item,aliases){
+        if(!item) return '';
+        var keys=Object.keys(item), i;
+        for(i=0;i<keys.length;i++){ if(aliases.indexOf(keys[i].toLowerCase())>=0) return item[keys[i]]; }
+        for(i=0;i<keys.length;i++){
+            var lk=keys[i].toLowerCase();
+            for(var j=0;j<aliases.length;j++){ if(lk.indexOf(aliases[j])>=0) return item[keys[i]]; }
+        }
+        return '';
+    }
+    // The payload's own name key is promoted to the fixed "Name" column, so it
+    // must be remembered and then excluded from the dynamic columns - otherwise
+    // "Name" is emitted twice (once fixed, once as an extra column).
+    var nameKey = '';
+    function pickShareQty(item, aliases, keyRe){
+        var n=parseNum(pickValue(item, aliases));
+        if(n>0) return n;
+        if(!item) return 0;
+        var keys=Object.keys(item), i;
+        for(i=0;i<keys.length;i++){
+            if(keyRe.test(keys[i])){
+                n=parseNum(item[keys[i]]);
+                if(n>0) return n;
+            }
+        }
+        return 0;
+    }
+    function pickName(item){
+        if(!item) return '';
+        var keys=Object.keys(item);
+        for(var i=0;i<keys.length;i++){
+            if(/name/i.test(keys[i])){
+                if(!nameKey) nameKey=keys[i];
+                return String(item[keys[i]]||'');
+            }
+        }
+        return '';
+    }
+    function isConsumedKey(key){
+        var lk=String(key).toLowerCase();
+        if(nameKey && lk===String(nameKey).toLowerCase()) return true;
+        if(/^(name|name1|nam1|inv_name|investor_name|applicant_name|holder_name)$/.test(lk)) return true;
+        if(CAT_ALIASES.indexOf(lk)>=0) return true;
+        return HIDDEN_KEYS.indexOf(lk)>=0 || ALLOT_ALIASES.indexOf(lk)>=0 || APPL_ALIASES.indexOf(lk)>=0;
+    }
+    function isMug(){
+        return $('input[name=clientType]:checked').val()==='MUG';
+    }
+    function pickCategoryRaw(item){
+        if(!item) return '';
+        var pem=lookup(item,'PEMNDG');
+        if(pem!==undefined && pem!==null && String(pem).trim()!=='') return String(pem).trim();
+        var keys=Object.keys(item), i;
+        for(i=0;i<keys.length;i++){
+            if(/pem.?ndg/i.test(keys[i])){
+                var v=item[keys[i]];
+                if(v!==undefined && v!==null && String(v).trim()!=='') return String(v).trim();
+            }
+        }
+        return '';
+    }
+    // Map MUFG PEMNDG text onto Retail / S-HNI / B-HNI. Check B-HNI before generic HNI.
+    function catBucket(raw){
+        var k=String(raw||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+        if(!k) return 'N/A';
+        if(k.indexOf('retail')>=0 || k==='rii' || k==='ri' || k==='ret') return 'Retail';
+        if(k.indexOf('bhni')>=0 || k.indexOf('bighni')>=0) return 'BHNI';
+        if(k.indexOf('smallhni')>=0 || k.indexOf('shni')>=0 || (k.indexOf('small')>=0 && k.indexOf('hni')>=0)) return 'SHNI';
+        if(k==='hni' || k==='nii') return 'SHNI';
+        return 'N/A';
+    }
+    function pickCategory(item){
+        return catBucket(pickCategoryRaw(item));
+    }
+    function displayCat(cat){
+        if(!cat || cat==='N/A') return 'N/A';
+        return CAT_DISPLAY[cat] || CAT_DISPLAY[String(cat).toUpperCase()] || cat;
+    }
+    function categoryClass(cat){
+        var k=String(cat||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+        if(k==='retail') return 'category-retail';
+        if(k==='hni'||k==='shni'||k==='nii'||k==='employee') return 'category-shni';
+        if(k==='bhni'||k==='qib'||k==='anchor') return 'category-bhni';
+        return 'category-na';
+    }
+    function catSortKey(cat){
+        var i=CAT_PREFER.indexOf(cat);
+        if(i<0) i=CAT_PREFER.indexOf(String(cat).toUpperCase());
+        if(i<0 && cat==='N/A') return 900;
+        return i<0 ? 100+String(cat).charCodeAt(0) : i;
+    }
+    // A key already added to extraCols before nameKey was known must be dropped.
+    function pruneCols(){
+        extraCols = extraCols.filter(function(k){ return !isConsumedKey(k); });
+    }
+    function ensureCols(item){
+        if(!item) return;
+        Object.keys(item).forEach(function(k){
+            if(isConsumedKey(k)) return;
+            if(extraCols.indexOf(k)<0) extraCols.push(k);
+        });
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Records
+     * ------------------------------------------------------------------ */
+    var idSeq=0;
+    function newRecord(pan,no){
+        return {id:++idSeq, no:no, pan:pan, status:'queued', name:'', applied:0, allotted:0,
+                category:'N/A', pemndg:'', lots:0, apps:1, note:'',
+                item:null, message:'', statusNote:''};
+    }
+    function labelNo(rec){
+        return rec.no % 1 === 0 ? String(rec.no) : Math.floor(rec.no)+'.'+Math.round((rec.no%1)*1000);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Category engine
+     * ------------------------------------------------------------------
+     * MUFG and KFINTECH both use applied shares (fallback: allotted if applied is 0):
+     * smallest = Retail, largest = B-HNI, everything in between = S-HNI.
+     * PEMNDG is shown in details when present, but is not used for the Category column.
+     * ------------------------------------------------------------------ */
+    var cfg = {lot:0};            // optional lot-size override from Advanced
+    var basis = {lot:0, how:'', ok:false, source:''};
+
+    function qtyOf(r){ return r.applied>0 ? r.applied : r.allotted; }
+    function gcd2(a,b){ a=Math.abs(a); b=Math.abs(b); while(b){ var t=a%b; a=b; b=t; } return a; }
+
+    // Lot size = greatest common divisor of every quantity seen.
+    function detectLot(values){
+        var g=0;
+        for(var i=0;i<values.length;i++){ g=gcd2(g,values[i]); if(g===1) break; }
+        return g>0?g:1;
+    }
+
+    function qtyForCat(r){ return r.applied>0 ? r.applied : r.allotted; }
+
+    function applyAppliedShareBuckets(list){
+        var values=list.map(qtyForCat).filter(function(v){ return v>0; });
+        var min=values.length?Math.min.apply(null,values):0;
+        var max=values.length?Math.max.apply(null,values):0;
+        var n=0;
+        list.forEach(function(r){
+            var q=qtyForCat(r);
+            if(q<=0){ r.category='N/A'; return; }
+            if(min===max || q<=min) r.category='Retail';
+            else if(q>=max)         r.category='BHNI';
+            else                    r.category='SHNI';
+            n++;
+        });
+        return {min:min, max:max, n:n};
+    }
+
+    function categorise(){
+        var perPan={};
+        records.forEach(function(r){ perPan[r.pan]=(perPan[r.pan]||0)+1; });
+        var withCat=0;
+
+        records.forEach(function(r){
+            r.lots=0; r.note=''; r.apps=perPan[r.pan]||1;
+            r.pemndg=pickCategoryRaw(r.item);
+            r.category='N/A';
+            if(r.apps>1) r.note=r.apps+' applications found on this PAN.';
+        });
+
+        var buckets=applyAppliedShareBuckets(records);
+        withCat=buckets.n;
+        basis={lot:0, how:'', ok:false, source:'applied shares', min:buckets.min, max:buckets.max};
+
+        var qtys=records.map(qtyOf).filter(function(v){ return v>0; });
+        if(!qtys.length && !withCat){
+            basis.how='No applied/allotted quantities returned yet.';
+            return;
+        }
+        var lot = cfg.lot>0 ? cfg.lot : (qtys.length ? detectLot(qtys) : 0);
+        basis.lot=lot;
+        basis.ok=true;
+        basis.how=(isMug()?'MUFG':'KFINTECH')+
+            ': smallest applied quantity ('+nf(basis.min||0)+') is Retail, largest ('+nf(basis.max||0)+
+            ') is B-HNI, anything in between is S-HNI. PEMNDG is not used for this column.';
+        if(lot) basis.how+=' Lot size '+nf(lot)+' share'+(lot===1?'':'s')+
+            (cfg.lot>0?' (pinned in Advanced)':' (auto-detected)')+'.';
+
+        if(lot>0){
+            records.forEach(function(r){
+                var q=qtyOf(r);
+                if(q>0) r.lots=Math.round(q/lot);
+            });
+        }
+    }
+
+    function recompute(){
+        stats=blankStats();
+        records.forEach(function(r){
+            stats.total++;
+            stats[r.status]=(stats[r.status]||0)+1;
+            stats.applied+=r.applied; stats.allotted+=r.allotted;
+            stats.cat[r.category]=(stats.cat[r.category]||0)+1;
+        });
+        var checked=stats.alloted+stats.none+stats.notfound+stats.error;
+        stats.rate=checked?(stats.alloted/checked*100):0;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * KPI cards (animated counters)
+     * ------------------------------------------------------------------ */
+    var counters={};
+    function animateNum($el,target,suffix,decimals){
+        var key=$el.attr('id'), from=counters[key]||0, start=null, dur=380;
+        counters[key]=target;
+        if(Math.abs(target-from)<0.5 && !decimals){ $el.text(nf(target)+(suffix||'')); return; }
+        function step(ts){
+            if(start===null) start=ts;
+            var p=Math.min(1,(ts-start)/dur), e=1-Math.pow(1-p,3), v=from+(target-from)*e;
+            $el.text(decimals?v.toFixed(decimals)+(suffix||''):nf(Math.round(v))+(suffix||''));
+            if(p<1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+    }
+    function paintStats(){
+        animateNum($('#appliedCount'),stats.total);
+        animateNum($('#posCount'),stats.alloted);
+        animateNum($('#zeroCount'),stats.none);
+        animateNum($('#notFoundCount'),stats.notfound);
+        animateNum($('#errorCount'),stats.error);
+        animateNum($('#totalAppliedSharesEl'),stats.applied);
+        animateNum($('#totalAllottedSharesEl'),stats.allotted);
+        animateNum($('#allotRateEl'),stats.rate,'%',1);
+        // Chip counts say what clicking that chip shows; the KPI cards above
+        // stay absolute, since they describe the whole run.
+        $('#allCount').text(chipCount('status','all'));
+        $('#allotedCount').text(chipCount('status','alloted'));
+        $('#noneCount').text(chipCount('status','none'));
+        $('#notfoundFilterCount').text(chipCount('status','notfound'));
+        $('#errorFilterCount').text(chipCount('status','error'));
+        renderCategoryChips();
+        $('#totalRowCount').text(stats.total);
+        $('#retryBtn').toggleClass('hidden', !(stats.error>0) || running);
+    }
+    function categoryBreakdown(){
+        var counts={}, order=[];
+        records.forEach(function(r){
+            var c=r.category||'N/A';
+            if(!counts[c]){ counts[c]=0; order.push(c); }
+            counts[c]++;
+        });
+        order.sort(function(a,b){
+            var d=catSortKey(a)-catSortKey(b);
+            return d || String(a).localeCompare(String(b));
+        });
+        return {order:order, counts:counts};
+    }
+    function renderCategoryChips(){
+        $('#catAnyCount').text(chipCount('category','all'));
+        $('#catRetailCount').text(chipCount('category','Retail'));
+        $('#catShniCount').text(chipCount('category','SHNI'));
+        $('#catBhniCount').text(chipCount('category','BHNI'));
+        $('#catNaCount').text(chipCount('category','N/A'));
+        if(fCategory!=='all' && CAT_FILTERS.indexOf(fCategory)<0) fCategory='all';
+        syncChips();
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Table rendering (records -> DOM, fully re-rendered)
+     * ------------------------------------------------------------------ */
+    function columns(){
+        var cols=[{key:'no',label:'#'},{key:'pan',label:'PAN'},{key:'status',label:'Status'},
+                {key:'category',label:'Category'},
+                {key:'applied',label:'Applied Shares',num:true},
+                {key:'allotted',label:'Allotted Shares',num:true},
+                {key:'lots',label:'Lots',num:true},
+                {key:'name',label:'Name'}];
+        return cols.concat(extraCols.map(function(c){ return {key:'x:'+c,label:c}; }));
+    }
+    function renderHead(){
+        var arrow=function(k){ return sort.key===k ? (sort.dir>0?'▲':'▼') : '↕'; };
+        $('#resultsTable thead tr').html(columns().map(function(c){
+            return '<th data-key="'+esc(c.key)+'" class="'+(sort.key===c.key?'sorted':'')+
+                   '" title="Sort by '+esc(c.label)+'">'+esc(c.label)+'<span class="arrow">'+arrow(c.key)+'</span></th>';
+        }).join(''));
+    }
+    function statusPill(rec){
+        var text=STATUS_TEXT[rec.status]||rec.status;
+        if(rec.status==='alloted') text='Allotted · '+nf(rec.allotted)+' shares';
+        if(rec.status==='error'&&rec.message) text=rec.message;
+        var extra=rec.status==='queued'?'<span class="spinner"></span>':'';
+        return '<span class="status-pill '+(STATUS_CLS[rec.status]||'status-none')+'">'+extra+esc(text)+'</span>';
+    }
+    function categoryPill(cat){
+        return '<span class="category-pill '+categoryClass(cat)+'">'+esc(displayCat(cat))+'</span>';
+    }
+    function cellValue(rec,col){
+        switch(col.key){
+            case 'no': return labelNo(rec);
+            case 'pan': return rec.pan;
+            case 'status': return STATUS_TEXT[rec.status]||rec.status;
+            case 'category': return rec.category;
+            case 'applied': return rec.applied;
+            case 'allotted': return rec.allotted;
+            case 'lots': return rec.lots;
+            case 'name': return rec.name||'';
+            default: return lookup(rec.item, col.key.slice(2));
+        }
+    }
+    function rowHtml(rec){
+        var cols=columns(), open=!!openIds[rec.id];
+        var html='<tr class="data-row'+(rec.status==='alloted'?' is-allotted':'')+(open?' open':'')+
+                 '" data-id="'+rec.id+'" data-status="'+rec.status+'">';
+        cols.forEach(function(c){
+            var raw=cellValue(rec,c), disp, cls='';
+            if(c.key==='no'){
+                html+='<td class="idx" data-label="#">'+esc(raw)+
+                      '<button class="details-btn" type="button" aria-label="Toggle details" aria-expanded="'+open+'">'+
+                      (open?'▴':'▾')+'</button></td>';
+                return;
+            }
+            if(c.key==='pan'){
+                html+='<td class="pan-cell" data-label="PAN">'+esc(raw)+
+                      '<button class="copy-pan" type="button" title="Copy PAN" aria-label="Copy PAN">⧉</button></td>';
+                return;
+            }
+            if(c.key==='status'){ html+='<td data-label="Status">'+statusPill(rec)+'</td>'; return; }
+            if(c.key==='category'){
+                html+='<td data-label="Category">'+categoryPill(rec.category)+'</td>'; return;
+            }
+            if(c.num){ cls='num-cell'; disp=nf(raw); if(!raw) cls+=' zero'; }
+            else disp = (raw&&typeof raw==='object') ? JSON.stringify(raw) : String(raw===undefined||raw===null?'':raw);
+            if(disp===''||disp==='0'&&c.num&&rec.status!=='alloted'&&rec.status!=='none') cls+=' blank';
+            html+='<td class="'+cls+'" data-label="'+esc(c.label)+'">'+esc(disp)+'</td>';
+        });
+        html+='</tr>';
+        if(open) html+=detailHtml(rec,cols.length);
+        return html;
+    }
+    function detailHtml(rec,colspan){
+        var items=[];
+        if(rec.message) items.push({k:'Information',v:rec.message});
+        items.push({k:'PAN',v:rec.pan});
+        items.push({k:'Status',v:STATUS_TEXT[rec.status]||rec.status});
+        items.push({k:'Category',v:displayCat(rec.category)});
+        if(rec.pemndg) items.push({k:'PEMNDG',v:rec.pemndg});
+        items.push({k:'Applied Shares',v:nf(rec.applied)});
+        items.push({k:'Allotted Shares',v:nf(rec.allotted)});
+        if(rec.lots) items.push({k:'Lots',v:nf(rec.lots)});
+        items.push({k:'Applications on this PAN',v:nf(rec.apps)});
+        if(rec.note) items.push({k:'Category note',v:rec.note});
+        if(basis.ok) items.push({k:'Category basis',v:basis.how});
+        if(rec.item){
+            Object.keys(rec.item).forEach(function(k){
+                if(HIDDEN_KEYS.indexOf(k.toLowerCase())>=0) return;
+                var v=rec.item[k];
+                items.push({k:k, v:(v&&typeof v==='object')?JSON.stringify(v):v});
+            });
+        }
+        var grid=items.map(function(it){
+            return '<div class="detail-item"><b>'+esc(it.k)+'</b>'+esc(it.v===''||it.v===null||it.v===undefined?'—':it.v)+'</div>';
+        }).join('');
+        return '<tr class="detail-row" data-for="'+rec.id+'"><td colspan="'+colspan+'">'+
+               '<div class="detail-grid">'+grid+'</div>'+
+               '<div class="detail-actions">'+
+                 '<button type="button" class="secondary copy-json">Copy raw response</button>'+
+                 '<button type="button" class="secondary close-detail">Close</button>'+
+               '</div></td></tr>';
+    }
+    function sortedRecords(){
+        var list=records.slice();
+        var k=sort.key, d=sort.dir;
+        list.sort(function(a,b){
+            var av,bv;
+            if(k==='no'){ av=a.no; bv=b.no; }
+            else if(k==='pan'){ return d*String(a.pan).localeCompare(String(b.pan)) || (a.no-b.no); }
+            else if(k==='status'){ av=STATUS_ORDER[a.status]; bv=STATUS_ORDER[b.status]; }
+            else if(k==='category'){
+                av=catSortKey(a.category||'N/A'); bv=catSortKey(b.category||'N/A');
+                if(av===bv) return d*String(a.category||'').localeCompare(String(b.category||'')) || (a.no-b.no);
+            }
+            else if(k==='applied'||k==='allotted'||k==='lots'){ av=a[k]; bv=b[k]; }
+            else if(k==='name'){ return d*String(a.name||'').localeCompare(String(b.name||'')) || (a.no-b.no); }
+            else {
+                var name=k.slice(2), as=String(lookup(a.item,name)||''), bs=String(lookup(b.item,name)||'');
+                var an=parseFloat(as), bn=parseFloat(bs);
+                if(!isNaN(an)&&!isNaN(bn)&&/^[\s\d.,-]+$/.test(as)&&/^[\s\d.,-]+$/.test(bs)){ av=an; bv=bn; }
+                else return d*as.localeCompare(bs) || (a.no-b.no);
+            }
+            if(av===bv) return a.no-b.no;
+            return d*(av<bv?-1:1);
+        });
+        return list;
+    }
+    // One predicate, parameterised, so the chip counts can ask "how many rows
+    // would show if THIS chip were the only thing that changed?" without
+    // duplicating the filter rules.
+    function matchesWith(rec,status,cat,term){
+        if(status!=='all' && rec.status!==status) return false;
+        if(cat!=='all' && (rec.category||'N/A')!==cat) return false;
+        if(!term) return true;
+        var hay=[rec.pan, STATUS_TEXT[rec.status], displayCat(rec.category), rec.category, rec.name, rec.message,
+                 rec.applied, rec.allotted].join(' ');
+        if(rec.item) hay+=' '+Object.keys(rec.item).map(function(k){ return rec.item[k]; }).join(' ');
+        return hay.toLowerCase().indexOf(term)>=0;
+    }
+    function matches(rec){ return matchesWith(rec,fStatus,fCategory,fTerm); }
+    // The number on a chip is a promise: "click me and you get this many rows".
+    // A plain click replaces whatever filter was active, so the count is taken
+    // with the other group cleared - the search box still applies, because
+    // clicking a chip does not clear it.
+    function chipCount(kind,value){
+        var st = kind==='status'   ? value : 'all';
+        var ct = kind==='category' ? value : 'all';
+        var n=0;
+        for(var i=0;i<records.length;i++) if(matchesWith(records[i],st,ct,fTerm)) n++;
+        return n;
+    }
+    function render(){
+        renderQueued=false;
+        renderHead();
+        var visible=sortedRecords().filter(matches);
+        $('#resultsTable tbody').html(visible.map(rowHtml).join(''));
+        $('#visibleCount').text(visible.length);
+        paintActiveFilters(visible.length);
+        // paintEmptyState owns the message (it offers a Clear-filters link);
+        // only visibility is decided here.
+        paintEmptyState();
+        $('#emptyState').toggle(visible.length===0);
+        $('.card[data-filter]').attr('aria-pressed',function(){ return $(this).data('filter')===fStatus; });
+        paintStats();
+        paintBasis();
+        renderChips();
+        drawDonut(); drawBars();
+    }
+    // Says which combination came up empty, because "no rows" on its own reads
+    // like a broken filter when the real answer is "no PAN is both of these".
+    function paintEmptyState(){
+        var filtered = fStatus!=='all' || fCategory!=='all' || !!fTerm;
+        if(!records.length || !filtered){
+            $('#emptyState').html('Nothing to show yet — add PANs above and tap <b>Check All PANs</b>.');
+            return;
+        }
+        var bits=[];
+        if(fStatus!=='all')   bits.push('<b>'+esc(STATUS_TEXT[fStatus]||fStatus)+'</b>');
+        if(fCategory!=='all') bits.push('<b>'+esc(displayCat(fCategory))+'</b>');
+        var why = bits.length===2 ? 'No PAN is both '+bits[0]+' and '+bits[1]+'.'
+                : bits.length===1 ? 'No PAN is '+bits[0]+(fTerm?' and matches the search.':'.')
+                : 'Nothing matches the search.';
+        if(bits.length===2 && fTerm) why='No PAN is both '+bits[0]+' and '+bits[1]+' and matches the search.';
+        $('#emptyState').html(why+' <a href="#" id="clearFiltersEmpty">Clear filters</a>');
+    }
+    $(document).on('click','#clearFiltersEmpty',function(e){ e.preventDefault(); clearFilters(); render(); });
+    // Each active filter is a pill with its own ✕, so one of two can be dropped
+    // without clearing the lot.
+    function paintActiveFilters(shown){
+        var tags=[];
+        if(fStatus!=='all')   tags.push({k:'status',   t:'Status: '+(STATUS_TEXT[fStatus]||fStatus)});
+        if(fCategory!=='all') tags.push({k:'category', t:'Category: '+displayCat(fCategory)});
+        if(fTerm)             tags.push({k:'search',   t:'Search: “'+fTerm+'”'});
+        var $f=$('#activeFilters');
+        if(!tags.length){ $f.addClass('hidden').empty(); return; }
+        $f.removeClass('hidden').html('· '+tags.map(function(t){
+            return '<span class="tagf">'+esc(t.t)+
+                   '<button type="button" class="drop" data-drop="'+t.k+'" title="Remove this filter"'+
+                   ' aria-label="Remove '+esc(t.t)+'">✕</button></span>';
+        }).join('')+(tags.length>1?' <a href="#" id="clearFilters">clear all</a>':''));
+    }
+    function dropFilter(kind){
+        if(kind==='status')        fStatus='all';
+        else if(kind==='category') fCategory='all';
+        else { fTerm=''; $('#searchBox').val(''); $('#clearSearch').hide(); }
+        syncChips(); render();
+    }
+    $(document).on('click','#activeFilters .drop',function(){ dropFilter($(this).attr('data-drop')); });
+    function clearFilters(){
+        fStatus='all'; fCategory='all'; fTerm='';
+        $('#searchBox').val(''); $('#clearSearch').hide();
+        syncChips();
+    }
+    $(document).on('click','#clearFilters',function(e){ e.preventDefault(); clearFilters(); render(); });
+    function paintBasis(){
+        var $b=$('#basisNote');
+        if(!basis.ok){ $b.addClass('hidden').empty(); return; }
+        $b.removeClass('hidden').html('<b>Category source:</b> '+esc(basis.how));
+    }
+    function scheduleRender(){
+        if(renderQueued) return;
+        renderQueued=true;
+        requestAnimationFrame(function(){ if(renderQueued) render(); });
+    }
+    function refreshAll(){ categorise(); recompute(); render(); }
+
+    /* ------------------------------------------------------------------ *
+     * Charts (retina-aware, responsive, interactive)
+     * ------------------------------------------------------------------ */
+    function fitCanvas(canvas,cssW,cssH){
+        var dpr=Math.min(window.devicePixelRatio||1,3);
+        canvas.style.width=cssW+'px'; canvas.style.height=cssH+'px';
+        canvas.width=Math.round(cssW*dpr); canvas.height=Math.round(cssH*dpr);
+        var ctx=canvas.getContext('2d');
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,cssW,cssH);
+        return ctx;
+    }
+    var donutSegs=[], donutHover=-1;
+    function donutData(){
+        return [{label:'Allotted',value:stats.alloted,color:'#12b76a',filter:'alloted'},
+                {label:'No Allotment',value:stats.none,color:'#98a2b3',filter:'none'},
+                {label:'Not Found',value:stats.notfound,color:'#f79009',filter:'notfound'},
+                {label:'Issues',value:stats.error,color:'#f04438',filter:'error'},
+                {label:'Pending',value:stats.queued,color:'#4f8cff',filter:'queued'}];
+    }
+    function drawDonut(){
+        var canvas=document.getElementById('summaryChart');
+        if(!canvas||!canvas.getContext) return;
+        var box=canvas.parentNode.getBoundingClientRect();
+        var size=Math.max(140,Math.min(210,box.width||200));
+        var ctx=fitCanvas(canvas,size,size);
+        var data=donutData().filter(function(d){ return d.value>0 || d.filter!=='queued'; });
+        var total=data.reduce(function(s,d){ return s+d.value; },0);
+        var cx=size/2, cy=size/2, r=size/2-8, inner=r*0.58;
+        donutSegs=[];
+        if(!total){
+            ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.arc(cx,cy,inner,0,Math.PI*2,true);
+            ctx.fillStyle=cssVar('--neutral-bg')||'#eaecf0'; ctx.fill('evenodd');
+        } else {
+            var start=-Math.PI/2;
+            data.forEach(function(d,i){
+                if(!d.value) return;
+                var a=d.value/total*Math.PI*2, grow=(donutHover===donutSegs.length)?3:0;
+                ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r+grow,start,start+a); ctx.closePath();
+                ctx.fillStyle=d.color; ctx.globalAlpha=(donutHover>=0&&donutHover!==donutSegs.length)?0.55:1;
+                ctx.fill(); ctx.globalAlpha=1;
+                donutSegs.push({start:start,end:start+a,seg:d});
+                start+=a;
+            });
+            ctx.globalCompositeOperation='destination-out';
+            ctx.beginPath(); ctx.arc(cx,cy,inner,0,Math.PI*2); ctx.fill();
+            ctx.globalCompositeOperation='source-over';
+        }
+        var hov=donutHover>=0?donutSegs[donutHover]:null;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillStyle=cssVar('--text')||'#182230';
+        ctx.font='bold '+Math.round(size*0.115)+'px Arial';
+        ctx.fillText(hov?nf(hov.seg.value):nf(total), cx, cy-size*0.03);
+        ctx.font=Math.round(size*0.058)+'px Arial'; ctx.fillStyle=cssVar('--muted')||'#667085';
+        ctx.fillText(hov?hov.seg.label:'PANs', cx, cy+size*0.075);
+
+        $('#donutLegend').html(donutData().map(function(d,i){
+            if(d.filter==='queued'&&!d.value) return '';
+            var pct=total?Math.round(d.value/total*100):0;
+            return '<div class="legend-item" data-filter="'+d.filter+'"><span class="dot" style="background:'+d.color+'"></span>'+
+                   '<span>'+d.label+'</span><span class="lv">'+nf(d.value)+' · '+pct+'%</span></div>';
+        }).join(''));
+    }
+    $('#summaryChart').on('mousemove',function(ev){
+        var rect=this.getBoundingClientRect(), size=rect.width;
+        var x=ev.clientX-rect.left-size/2, y=ev.clientY-rect.top-size/2;
+        var dist=Math.sqrt(x*x+y*y), r=size/2-8;
+        var hit=-1;
+        if(dist<=r+4 && dist>=r*0.58){
+            var ang=Math.atan2(y,x);
+            if(ang < -Math.PI/2) ang += Math.PI*2;
+            donutSegs.forEach(function(s,i){ if(ang>=s.start&&ang<s.end) hit=i; });
+        }
+        if(hit!==donutHover){ donutHover=hit; this.style.cursor=hit>=0?'pointer':'default'; drawDonut(); }
+    }).on('mouseleave',function(){ if(donutHover!==-1){ donutHover=-1; drawDonut(); } })
+      .on('click',function(){ if(donutHover>=0) setStatusFilter(donutSegs[donutHover].seg.filter,true); });
+    $('#donutLegend').on('click','.legend-item',function(){ setStatusFilter($(this).data('filter'),true); });
+
+    var barRects=[];
+    function truncateCanvasText(ctx,text,maxWidth){
+        if(!text) return '';
+        if(ctx.measureText(text).width<=maxWidth) return text;
+        var ell='…', lo=0, hi=text.length;
+        while(lo<hi){
+            var mid=Math.ceil((lo+hi)/2);
+            if(ctx.measureText(text.slice(0,mid)).width+ctx.measureText(ell).width<=maxWidth) lo=mid;
+            else hi=mid-1;
+        }
+        return text.slice(0,lo)+ell;
+    }
+    function drawBars(){
+        var canvas=document.getElementById('barChart');
+        if(!canvas||!canvas.getContext) return;
+        // 0 = show every allotted PAN
+        var topN=parseInt($('#topNSelect').val(),10);
+        if(!(topN>0)) topN=Infinity;
+        var list=records.filter(function(r){ return r.allotted>0; })
+                        .sort(function(a,b){ return b.allotted-a.allotted; }).slice(0,topN);
+        var wrap=canvas.parentNode;
+        var cssW=Math.max(240,(wrap.getBoundingClientRect().width||600));
+        var rowH=window.innerWidth<760?32:28, pad=10;
+        // "All" can mean hundreds of rows — thin the rows so the canvas stays
+        // within the size every browser can rasterise.
+        if(list.length*rowH>4000) rowH=Math.max(6,Math.floor(4000/list.length));
+        var cssH=Math.max(56,list.length*rowH+pad*2);
+        var labelFont=(rowH>28?'12.5px':'12px')+' Arial';
+        var valW=64;
+        var labelW=140;
+        if(list.length){
+            var measure=document.createElement('canvas').getContext('2d');
+            measure.font=labelFont;
+            list.forEach(function(r){
+                var label=r.name||r.pan||'';
+                labelW=Math.max(labelW, measure.measureText(label).width+16);
+            });
+            labelW=Math.min(labelW, Math.max(220, cssW*0.58));
+        }
+        var chartW=Math.max(40, cssW-labelW-valW-18);
+        var canvasW=Math.max(cssW, labelW+chartW+valW+18);
+        var ctx=fitCanvas(canvas,canvasW,cssH);
+        barRects=[];
+        if(!list.length){
+            ctx.fillStyle=cssVar('--muted')||'#98a2b3'; ctx.font='13px Arial'; ctx.textAlign='left'; ctx.textBaseline='middle';
+            ctx.fillText('Allotted PANs will appear here after processing.',10,cssH/2);
+            return;
+        }
+        var max=Math.max.apply(null,list.map(function(r){ return r.allotted; }));
+        var accent=cssVar('--primary')||'#2563eb';
+        ctx.font=labelFont;
+        list.forEach(function(r,i){
+            var y=pad+i*rowH;
+            var fullLabel=r.name||r.pan;
+            var label=truncateCanvasText(ctx, fullLabel, labelW-8);
+            ctx.fillStyle=cssVar('--muted')||'#475467';
+            ctx.textAlign='left'; ctx.textBaseline='middle';
+            ctx.fillText(label,4,y+rowH/2);
+            var bw=Math.max(3,(r.allotted/max)*chartW);
+            var grad=ctx.createLinearGradient(labelW,0,labelW+bw,0);
+            grad.addColorStop(0,accent); grad.addColorStop(1,'#7c3aed');
+            ctx.fillStyle=grad;
+            var bh=rowH-9, by=y+4.5;
+            if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(labelW,by,bw,bh,4); ctx.fill(); }
+            else ctx.fillRect(labelW,by,bw,bh);
+            ctx.fillStyle=cssVar('--text')||'#182230'; ctx.textAlign='left';
+            ctx.fillText(nf(r.allotted),labelW+bw+7,y+rowH/2);
+            barRects.push({x:labelW,y:by,w:bw,h:bh,rowY:y,rowH:rowH,rec:r,fullLabel:fullLabel});
+        });
+    }
+    function barHitTest(ev,canvas){
+        var rect=canvas.getBoundingClientRect();
+        var pt=ev.touches&&ev.touches[0]?ev.touches[0]:ev;
+        var x=pt.clientX-rect.left, y=pt.clientY-rect.top;
+        for(var i=0;i<barRects.length;i++){
+            var b=barRects[i];
+            if(y>=b.rowY&&y<=b.rowY+b.rowH) return {bar:b,x:x,y:y};
+        }
+        return null;
+    }
+    $('#barChart').on('mousemove',function(ev){
+        var hit=barHitTest(ev,this), $tip=$('#chartTip');
+        if(hit){
+            this.style.cursor='pointer';
+            $tip.css({left:Math.min(hit.bar.x+hit.bar.w,this.getBoundingClientRect().width-10)+'px',
+                      top:(hit.bar.rowY+4)+'px', opacity:1, whiteSpace:'normal', maxWidth:'min(92vw, 420px)'})
+                .html(esc(hit.bar.rec.pan)+(hit.bar.fullLabel||hit.bar.rec.name?' · '+esc(hit.bar.fullLabel||hit.bar.rec.name):'')+
+                      ' — '+nf(hit.bar.rec.allotted)+' allotted');
+        } else { this.style.cursor='default'; $tip.css('opacity',0); }
+    }).on('mouseleave',function(){ $('#chartTip').css('opacity',0); })
+      .on('click',function(ev){
+        var hit=barHitTest(ev,this);
+        if(hit) focusRecord(hit.bar.rec.id);
+    });
+
+    function focusRecord(id){
+        clearFilters();
+        render();
+        var $row=$('#resultsTable tbody tr[data-id="'+id+'"]');
+        if($row.length){
+            $row.addClass('flash');
+            $row[0].scrollIntoView({behavior:'smooth',block:'center'});
+        }
+    }
+
+    var resizeTimer=null;
+    $(window).on('resize orientationchange',function(){
+        clearTimeout(resizeTimer);
+        resizeTimer=setTimeout(function(){ drawDonut(); drawBars(); },120);
+    });
+    $('#topNSelect').on('change',drawBars);
+
+    /* ------------------------------------------------------------------ *
+     * Filters, sorting, search
+     * ------------------------------------------------------------------ */
+    /* One click, one filter. Status and category are two different questions, so
+     * picking a chip in one row clears the other row - otherwise the chip left
+     * lit over there reads as a filter that refused to go away, and the two
+     * together can silently produce an empty table. Shift/Ctrl-click still
+     * combines them, and every active filter shows as a pill you can drop. */
+    function syncChips(){
+        $('#statusChips .filter-btn').each(function(){
+            var on=String($(this).attr('data-filter'))===(fStatus||'all');
+            $(this).toggleClass('active',on).attr('aria-pressed',on?'true':'false')
+                   .toggleClass('no-hits', chipCountOf(this)===0);
+        });
+        $('#categoryChips .filter-btn').each(function(){
+            var on=String($(this).attr('data-category'))===(fCategory||'all');
+            $(this).toggleClass('active',on).attr('aria-pressed',on?'true':'false')
+                   .toggleClass('no-hits', chipCountOf(this)===0);
+        });
+    }
+    // Reads the count already painted into the chip, so the dimming can never
+    // disagree with the number next to it.
+    function chipCountOf(el){
+        var $c=$(el).find('.count');
+        return $c.length ? (parseInt($c.text(),10)||0) : 1;
+    }
+    function setFilter(kind,value,scroll,additive){
+        var v=value||'all';
+        if(kind==='category'){ fCategory=v; if(!additive) fStatus='all'; }
+        else                 { fStatus=v;   if(!additive) fCategory='all'; }
+        syncChips();
+        render();
+        if(scroll) document.getElementById('resultsSection').scrollIntoView({behavior:'smooth',block:'start'});
+    }
+    function setStatusFilter(f,scroll){ setFilter('status',f,scroll); }
+    var addsFilter = function(ev){ return !!(ev && (ev.shiftKey||ev.ctrlKey||ev.metaKey)); };
+    $('#statusChips').on('click keydown','.filter-btn',function(ev){
+        if(ev.type==='keydown' && ev.key!=='Enter' && ev.key!==' ') return;
+        if(ev.type==='keydown') ev.preventDefault();
+        var f=String($(this).attr('data-filter'));
+        setFilter('status', f===fStatus ? 'all' : f, false, addsFilter(ev));
+    });
+    $('#categoryChips').on('click keydown','.filter-btn',function(ev){
+        if(ev.type==='keydown' && ev.key!=='Enter' && ev.key!==' ') return;
+        if(ev.type==='keydown') ev.preventDefault();
+        var c=String($(this).attr('data-category'));
+        setFilter('category', c===fCategory ? 'all' : c, false, addsFilter(ev));
+    });
+    $('.card[data-filter]').on('click keydown',function(ev){
+        if(ev.type==='keydown' && ev.key!=='Enter' && ev.key!==' ') return;
+        ev.preventDefault();
+        setStatusFilter($(this).data('filter'),true);
+    });
+    var searchTimer=null;
+    $('#searchBox').on('input',function(){
+        var v=this.value;
+        $('#clearSearch').toggle(!!v);
+        clearTimeout(searchTimer);
+        searchTimer=setTimeout(function(){ fTerm=v.trim().toLowerCase(); render(); },160);
+    });
+    $('#clearSearch').on('click',function(){ $('#searchBox').val('').trigger('input').focus(); });
+    $('#sortSelect').on('change',function(){
+        var p=String(this.value).split(':');
+        sort={key:p[0],dir:Number(p[1])||1};
+        render();
+    });
+    $('#resultsTable thead').on('click','th',function(){
+        var k=$(this).data('key');
+        if(sort.key===k) sort.dir*=-1; else sort={key:k,dir:(k==='allotted'||k==='applied')?-1:1};
+        var v=sort.key+':'+sort.dir;
+        $('#sortSelect').val($('#sortSelect option[value="'+v+'"]').length?v:'');
+        render();
+    });
+
+    /* Row interactions */
+    $('#resultsTable tbody')
+        .on('click','.details-btn',function(ev){
+            ev.stopPropagation();
+            var id=$(this).closest('tr').data('id');
+            if(openIds[id]) delete openIds[id]; else openIds[id]=true;
+            render();
+        })
+        .on('click','.copy-pan',function(ev){
+            ev.stopPropagation();
+            var id=$(this).closest('tr').data('id');
+            var rec=records.filter(function(r){ return r.id===id; })[0];
+            if(rec) copyText(rec.pan,'PAN '+rec.pan+' copied');
+        })
+        .on('dblclick','tr.data-row',function(){ $(this).find('.details-btn').trigger('click'); })
+        .on('click','.close-detail',function(){
+            delete openIds[$(this).closest('tr.detail-row').data('for')]; render();
+        })
+        .on('click','.copy-json',function(){
+            var id=$(this).closest('tr.detail-row').data('for');
+            var rec=records.filter(function(r){ return r.id===id; })[0];
+            copyText(JSON.stringify(rec?(rec.item||{PAN:rec.pan,Information:rec.message}):{},null,2),'Response copied');
+        });
+
+    $('#toggleAllDetails').on('click',function(){
+        var expand=$(this).text().indexOf('Expand')===0;
+        openIds={};
+        if(expand) sortedRecords().filter(matches).forEach(function(r){ openIds[r.id]=true; });
+        $(this).text(expand?'Collapse all':'Expand all');
+        render();
+    });
+    $('#copyAllotted').on('click',function(){
+        var pans=records.filter(function(r){ return r.status==='alloted'; }).map(function(r){ return r.pan; });
+        if(!pans.length){ toast('No allotted PANs yet','err'); return; }
+        copyText(pans.join(', '),pans.length+' allotted PANs copied');
+    });
+
+    /* ------------------------------------------------------------------ *
+     * MUFG IPO list + client ID
+     * ------------------------------------------------------------------ */
+    function appBase(){
+        var path=location.pathname;
+        var slash=path.lastIndexOf('/');
+        return slash>=0 ? path.slice(0,slash+1) : '/';
+    }
+    function mugProxyCandidates(){
+        var custom=$('#mugUrl').val().trim();
+        var out=[], isPages=/\.github\.io$/i.test(location.hostname);
+        if(custom && !(isPages && custom==='/api/proxy')) out.push(custom.split('?')[0]);
+        if(isPages){
+            // Pages cannot run the functions, so hop to the Vercel deployment.
+            // Tried in order; "-two" is the one actually live, the bare name is
+            // kept in case the project is ever aliased back to it.
+            out.push('https://ipo-allotment-checker-two.vercel.app/api/proxy');
+            out.push('https://ipo-allotment-checker.vercel.app/api/proxy');
+            out.push('https://ipo-allotment-checker-api.onrender.com/api/proxy');
+        } else {
+            out.push('/api/proxy');
+            if(location.protocol==='file:') out.push('http://127.0.0.1:5000/api/proxy');
+        }
+        var seen={}, deduped=[];
+        out.forEach(function(u){ if(u && !seen[u]){ seen[u]=1; deduped.push(u); } });
+        return deduped;
+    }
+    function mugProxyBase(){
+        var list=mugProxyCandidates();
+        return list.length ? list[0] : '/api/proxy';
+    }
+    function getClientId(){
+        if($('input[name=clientType]:checked').val()==='MUG'){
+            var manual=($('#mugClientId').val()||'').trim();
+            if(manual) return manual;
+            return ($('#mugIpoSelect').val()||'').trim();
+        }
+        return ($('#clientId').val()||'').trim();
+    }
+    function syncMugClientId(){
+        var manual=($('#mugClientId').val()||'').trim();
+        var fromList=($('#mugIpoSelect').val()||'').trim();
+        var id=manual || fromList;
+        $('#clientId').val(id);
+        store.set('mugClientId',manual);
+        if(!manual) store.set('mugIpoId',fromList);
+    }
+    // Every write to the IPO <select> goes through here so the dropdown UI in
+    // front of it is repainted from the same source of truth.
+    function setIpoOptions(html){
+        $('#mugIpoSelect').html(html).trigger('combo:refresh');
+    }
+    function fillMufgIpoList(list){
+        var $sel=$('#mugIpoSelect');
+        if(!Array.isArray(list) || !list.length){
+            setIpoOptions('<option value="">No IPOs available</option>');
+            return;
+        }
+        var html='<option value="">Select an IPO</option>', i;
+        for(i=0;i<list.length;i++){
+            html+='<option value="'+esc(list[i].id)+'">'+esc(list[i].name)+'</option>';
+        }
+        setIpoOptions(html);
+        var saved=store.get('mugIpoId','');
+        if(saved && $sel.find('option[value="'+saved+'"]').length) $sel.val(saved);
+        syncMugClientId();
+        $sel.trigger('combo:refresh');
+        $('#mugIpoHint').text('Choose the IPO — the company\'s client ID is sent automatically.');
+    }
+    function loadMufgIposFromApi(){
+        var bases=mugProxyCandidates(), idx=0;
+        function attempt(){
+            if(idx>=bases.length){
+                setIpoOptions('<option value="">Could not load IPO list</option>');
+                $('#mugIpoHint').html('Dropdown unavailable — enter the <b>Client ID manually</b> below, or deploy the API: '+
+                    '<a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Vercel</a>.');
+                return;
+            }
+            $.ajax({
+                url:apiUrl(bases[idx++]+'?action=ipos'),
+                type:'GET',
+                dataType:'json',
+                success:fillMufgIpoList,
+                error:function(x){
+                    if(x.status===0 || x.status===404 || x.status===502) attempt();
+                    else attempt();
+                }
+            });
+        }
+        attempt();
+    }
+    function loadMufgIpos(){
+        setIpoOptions('<option value="">Loading IPOs…</option>');
+        if(/\.github\.io$/i.test(location.hostname)){
+            $.ajax({
+                url:appBase()+'ipos.json?_='+Date.now(),
+                type:'GET',
+                dataType:'json',
+                cache:false,
+                success:fillMufgIpoList,
+                error:loadMufgIposFromApi
+            });
+            return;
+        }
+        loadMufgIposFromApi();
+    }
+    /* ------------------------------------------------------------------ *
+     * Dropdown that stays inside the window
+     * ------------------------------------------------------------------ *
+     * A native <select> popup is drawn by the OS: it widens itself to fit the
+     * longest option, so long MUFG IPO names push it past the edge of the
+     * window and off screen. The <select> stays in the DOM as the value holder
+     * — every .val() / .trigger('change') path in this file keeps working — and
+     * this paints a panel pinned to the field's own width (names wrap instead
+     * of overflowing), flipped above the field when there is no room below.
+     * ------------------------------------------------------------------ */
+    function enhanceSelect(selector,opts){
+        opts=opts||{};
+        var $sel=$(selector);
+        if(!$sel.length || $sel.data('combo')) return;
+        var el=$sel[0];
+        var $wrap=$('<div class="combo"></div>').insertBefore($sel).append($sel);
+        $sel.addClass('combo-native').attr({'aria-hidden':'true','tabindex':'-1'});
+        var $btn=$('<button type="button" class="combo-btn" aria-haspopup="listbox" aria-expanded="false">'+
+                   '<span class="val"></span><span class="caret" aria-hidden="true">▼</span></button>');
+        var $list=$('<div class="combo-list" role="listbox"></div>');
+        var $search=opts.search ? $('<div class="combo-search"><input type="text" autocomplete="off" spellcheck="false"></div>') : null;
+        if($search) $search.find('input').attr('placeholder',opts.searchPlaceholder||'Type to filter…');
+        var $pop=$('<div class="combo-pop"></div>').append($search||'').append($list);
+        $wrap.append($btn).append($pop);
+        if(el.id){
+            $btn.attr('id',el.id+'Btn');
+            $('label[for="'+el.id+'"]').attr('for',el.id+'Btn');   // the real select is hidden now
+        }
+        var aria=$sel.attr('aria-label');
+        if(aria) $btn.attr('aria-label',aria);
+        var term='', cursor=-1;
+
+        function isOpen(){ return $wrap.hasClass('open'); }
+        function paintBtn(){
+            var o=el.options[el.selectedIndex], txt=o?$(o).text():'';
+            $btn.find('.val').text(txt);
+            $btn.attr('title',txt);
+            $wrap.toggleClass('is-placeholder',!el.value);
+        }
+        function visibleOptions(){
+            var t=term.trim().toLowerCase();
+            return $sel.find('option').map(function(){
+                return {value:this.value, text:$(this).text(), ph:this.value===''};
+            }).get().filter(function(o){ return !t || o.text.toLowerCase().indexOf(t)>=0; });
+        }
+        function paintList(){
+            var opt=visibleOptions();
+            if(!opt.length){
+                $list.html('<div class="combo-none">No IPO matches “'+esc(term)+'”.</div>');
+                cursor=-1; return;
+            }
+            $list.html(opt.map(function(o){
+                var on=o.value===el.value;
+                return '<button type="button" role="option" class="combo-opt'+(on?' sel':'')+(o.ph?' ph':'')+'"'+
+                       ' aria-selected="'+(on?'true':'false')+'" data-value="'+esc(o.value)+'">'+esc(o.text)+'</button>';
+            }).join(''));
+            var at=-1;
+            opt.forEach(function(o,i){ if(at<0 && o.value===el.value) at=i; });
+            moveCursor(at<0?0:at,true);
+        }
+        // Keeps the panel inside the viewport: it opens upward when the field is
+        // near the bottom, and never taller than the space it has.
+        function place(){
+            var r=$btn[0].getBoundingClientRect();
+            var below=window.innerHeight-r.bottom-14, above=r.top-14;
+            var up=below<190 && above>below;
+            $wrap.toggleClass('up',up);
+            var room=Math.max(120,up?above:below);
+            $list.css('maxHeight',Math.min(320,Math.max(96,room-($search?54:0)-20))+'px');
+        }
+        function open(){
+            if(isOpen()) return;
+            term=''; if($search) $search.find('input').val('');
+            $wrap.addClass('open'); $btn.attr('aria-expanded','true');
+            paintList(); place();
+            // Only auto-focus the filter box with a keyboard around: on a phone
+            // it would throw the on-screen keyboard over the list.
+            if($search && window.matchMedia && window.matchMedia('(min-width:760px)').matches) $search.find('input').focus();
+        }
+        function close(refocus){
+            if(!isOpen()) return;
+            $wrap.removeClass('open up'); $btn.attr('aria-expanded','false');
+            if(refocus!==false) $btn.focus();
+        }
+        function pick(value){
+            if(el.value!==value){ el.value=value; $sel.trigger('change'); }
+            paintBtn(); close();
+        }
+        function moveCursor(n,absolute){
+            var $o=$list.find('.combo-opt');
+            if(!$o.length){ cursor=-1; return; }
+            cursor = absolute ? Math.max(0,Math.min($o.length-1,n)) : ((cursor<0?0:cursor)+n+$o.length)%$o.length;
+            $o.removeClass('cursor').eq(cursor).addClass('cursor');
+            var node=$o[cursor], box=$list[0];
+            if(node.offsetTop<box.scrollTop) box.scrollTop=node.offsetTop-4;
+            else if(node.offsetTop+node.offsetHeight>box.scrollTop+box.clientHeight)
+                box.scrollTop=node.offsetTop+node.offsetHeight-box.clientHeight+4;
+        }
+
+        $btn.on('click',function(){ isOpen()?close():open(); });
+        $btn.on('keydown',function(ev){
+            if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){ ev.preventDefault(); open(); }
+        });
+        $list.on('click','.combo-opt',function(){ pick($(this).attr('data-value')); })
+             .on('mousemove','.combo-opt',function(){
+                 moveCursor($list.find('.combo-opt').index(this),true);
+             });
+        if($search) $search.find('input').on('input',function(){ term=this.value; paintList(); place(); });
+        $wrap.on('keydown',function(ev){
+            if(!isOpen()) return;
+            if(ev.key==='Escape'){ ev.preventDefault(); close(); }
+            else if(ev.key==='ArrowDown'){ ev.preventDefault(); moveCursor(1); }
+            else if(ev.key==='ArrowUp'){ ev.preventDefault(); moveCursor(-1); }
+            else if(ev.key==='Home'){ ev.preventDefault(); moveCursor(0,true); }
+            else if(ev.key==='End'){ ev.preventDefault(); moveCursor(1e9,true); }
+            else if(ev.key==='Enter'){
+                ev.preventDefault();
+                var $o=$list.find('.combo-opt').eq(cursor);
+                if($o.length) pick($o.attr('data-value'));
+            }
+            else if(ev.key==='Tab'){ close(false); }
+        });
+        $(document).on('mousedown',function(ev){
+            if(isOpen() && !$wrap[0].contains(ev.target)) close(false);
+        });
+        $(window).on('resize scroll',function(){ if(isOpen()) place(); });
+        // Repaint whenever the options or the value change underneath us.
+        $sel.on('change combo:refresh',function(){ paintBtn(); if(isOpen()) paintList(); });
+        $sel.data('combo',true);
+        paintBtn();
+    }
+    enhanceSelect('#mugIpoSelect',{search:true,searchPlaceholder:'Type to filter IPOs…'});
+
+    function updateClientTypeUI(){
+        var mug=$('input[name=clientType]:checked').val()==='MUG';
+        var isPages=/\.github\.io$/i.test(location.hostname);
+        $('#fintechClientWrap').toggleClass('hidden',mug);
+        $('#mugIpoWrap').toggleClass('hidden',!mug);
+        $('#mugApiBanner').toggleClass('hidden',!(mug && isPages));
+        if(mug){
+            $('#mugIpoHint').text('Choose the IPO — the company\'s client ID is sent automatically.');
+            loadMufgIpos();
+        }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Network
+     * ------------------------------------------------------------------ */
+    function friendlyError(xhr){
+        if(xhr.status===404) return {notFound:true, msg:'No record was found for this PAN.'};
+        if(xhr.status===0)   return {conn:true, msg:'Connection unavailable'};
+        if(xhr.status>=500)  return {msg:'Service temporarily unavailable'};
+        if(xhr.status===401||xhr.status===403) return {msg:'Not authorised — check the Client ID'};
+        return {msg:'Could not check this PAN'};
+    }
+    function applyItem(rec,item){
+        rec.item=item;
+        rec.allotted=pickShareQty(item, ALLOT_ALIASES, /all.?share|allot/i);
+        rec.applied=pickShareQty(item, APPL_ALIASES, /app.?share|applied/i);
+        rec.name=pickName(item);   // sets nameKey, so it must run before ensureCols
+        rec.pemndg=pickCategoryRaw(item);
+        rec.category='N/A';
+        ensureCols(item);
+        pruneCols();
+        rec.status=rec.allotted>0?'alloted':'none';
+        rec.message='';
+    }
+    function addSibling(rec,item,k){
+        var sib=newRecord(rec.pan, rec.no + k/1000);
+        applyItem(sib,item);
+        records.splice(records.indexOf(rec)+k,0,sib);
+    }
+    function markNotFound(rec,msg){
+        rec.status='notfound'; rec.item=null; rec.applied=rec.allotted=0;
+        rec.message=msg||'No matching record was returned for this PAN.';
+    }
+    function markIssue(rec,msg){
+        rec.status='error'; rec.item=null; rec.applied=rec.allotted=0; rec.message=msg;
+    }
+
+    function parseMugXml(text){
+        var body=String(text).replace(/\\u003c/g,'<').replace(/\\u003e/g,'>').replace(/\\n/g,'').replace(/\\r/g,'');
+        var xml=new DOMParser().parseFromString(body,'application/xml');
+        var tables=xml.getElementsByTagName('Table'), items=[];
+        for(var i=0;i<tables.length;i++){
+            var obj={};
+            for(var j=0;j<tables[i].childNodes.length;j++){
+                var child=tables[i].childNodes[j];
+                if(child.nodeType===1) obj[child.nodeName]=child.textContent;
+            }
+            items.push(obj);
+        }
+        return items;
+    }
+
+    // A static host (GitHub Pages) is a different origin from the registrar, so
+    // the call only succeeds if the API allows it or a proxy is put in front.
+    function apiUrl(u){
+        var prefix=$('#proxyUrl').val().trim();
+        if(!prefix) return u;
+        return /[?&=]$/.test(prefix) ? prefix+encodeURIComponent(u) : prefix.replace(/\/$/,'')+'/'+u;
+    }
+    function fetchOne(rec){
+        return new Promise(function(resolve){
+            if(cancelled){ resolve(); return; }
+            var clientType=$('input[name=clientType]:checked').val();
+            var clientId=getClientId();
+            var done=function(){ resolve(); };
+            var xhr;
+
+            if(clientType==='MUG'){
+                var mugPayload=JSON.stringify({
+                    clientid:clientId,
+                    PAN:rec.pan,
+                    IFSC:'',
+                    CHKVAL:'1',
+                    token:''
+                });
+                var mugBases=mugProxyCandidates(), mugIdx=0;
+                function mugAttempt(){
+                    if(cancelled){ done(); return; }
+                    if(mugIdx>=mugBases.length){
+                        connFailures++;
+                        markIssue(rec,'MUFG proxy unavailable. <a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Deploy free API on Vercel</a> (one-time, ~2 min), then retry.');
+                        done();
+                        return;
+                    }
+                    var mugUrl=apiUrl(mugBases[mugIdx++]);
+                    xhr=$.ajax({
+                        url:mugUrl, type:'POST',
+                        contentType:'application/json; charset=UTF-8',
+                        dataType:'json',
+                        data:mugPayload,
+                        success:function(response){
+                            try{
+                                var body=(response&&response.d!==undefined)?response.d:response;
+                                var items=(typeof body==='string')?parseMugXml(body):(Array.isArray(body)?body:(body?[body]:[]));
+                                if(items.length){
+                                    applyItem(rec,items[0]);
+                                    for(var k=1;k<items.length;k++) addSibling(rec,items[k],k);
+                                } else markNotFound(rec,'No matching MUFG record was returned.');
+                            }catch(e){ markIssue(rec,'Unable to read MUFG result: '+(e.message||e)); }
+                            done();
+                        },
+                        error:function(x){
+                            if(x.status===0 || x.status===404 || x.status===502) mugAttempt();
+                            else {
+                                var f=friendlyError(x);
+                                if(f.conn) connFailures++;
+                                if(f.notFound) markNotFound(rec,f.msg); else markIssue(rec,f.msg);
+                                done();
+                            }
+                        }
+                    });
+                    activeXhr.push(xhr);
+                }
+                mugAttempt();
+                return;
+            } else {
+                xhr=$.ajax({
+                    url:apiUrl($('#fintechUrl').val().trim()), type:'GET',
+                    headers:{accept:'application/json, text/plain, */*', client_id:clientId, reqparam:rec.pan},
+                    success:function(response){
+                        try{
+                            var payload=(response&&typeof response==='object'&&response.data!=null)?response.data:response;
+                            if(Array.isArray(payload)){
+                                var objs=payload.filter(function(p){ return p&&typeof p==='object'&&!Array.isArray(p); });
+                                if(objs.length){
+                                    applyItem(rec,objs[0]);
+                                    for(var k=1;k<objs.length;k++) addSibling(rec,objs[k],k);
+                                } else markNotFound(rec,'No matching record was returned.');
+                            } else if(payload&&typeof payload==='object'){
+                                applyItem(rec,payload);
+                            } else markNotFound(rec,'No matching record was returned.');
+                        }catch(e){ markIssue(rec,'Unable to read the result'); }
+                    },
+                    error:function(x){
+                        var f=friendlyError(x);
+                        if(f.conn) connFailures++;
+                        if(f.notFound) markNotFound(rec,f.msg); else markIssue(rec,f.msg);
+                    },
+                    complete:done
+                });
+            }
+            activeXhr.push(xhr);
+        });
+    }
+
+    function showNetBanner(){
+        if(connFailures<3) return;
+        var isFile=location.protocol==='file:';
+        var isPages=/\.github\.io$/i.test(location.hostname);
+        var mug=$('input[name=clientType]:checked').val()==='MUG';
+        var hasProxy=!!$('#proxyUrl').val().trim();
+        var msg='<b>Requests are not reaching the server.</b> ';
+        if(isFile) msg+='This page is open as a local <code>file://</code> copy, so the browser blocks the '+
+            'cross-origin API call. Serve it over http(s) instead. ';
+        if(isPages) msg+='This is a <b>GitHub Pages</b> site, so it is a different origin from the registrar. '+
+            'The KFINTECH call sends the custom headers <code>client_id</code> and <code>reqparam</code>, which makes '+
+            'the browser send a CORS preflight first — the API has to answer it with '+
+            '<code>Access-Control-Allow-Origin: '+esc(location.origin)+'</code> and '+
+            '<code>Access-Control-Allow-Headers: client_id, reqparam, accept</code>. '+
+            (hasProxy?'Your CORS proxy is not answering either — check the prefix. '
+                    :'If you cannot change the API, put a CORS proxy prefix in <b>Advanced</b>. ');
+        if(mug) msg+='For <b>MUFG</b> on GitHub Pages, deploy the free API once: '+
+            '<a href="https://vercel.com/new/clone?repository-url=https://github.com/phanikumar96/ipo-allotment-checker" target="_blank" rel="noopener">Deploy on Vercel</a>, '+
+            'wait ~1 min, then click <b>Retry failed</b>. ';
+        msg+='Also check that the device is online and that the Client ID is correct.';
+        $('#netBanner').show().html(msg);
+    }
+
+    function setBusy(on,text,cls){
+        running=on;
+        $('#fetchBtn').prop('disabled',on).text(on?'Checking…':'Check All PANs');
+        $('#cancelBtn').toggleClass('hidden',!on);
+        $('#clearResults, #exportExcel, #exportCsv').prop('disabled',on);
+        $('#processingMessage').removeClass('busy done warn').addClass(cls||'')
+            .html((on?'<span class="spinner"></span>':'')+esc(text||''));
+    }
+
+    async function runQueue(list){
+        cancelled=false; connFailures=0; activeXhr=[];
+        var limit=Math.max(1,parseInt($('#speedSelect').val(),10)||4);
+        var next=0, finished=0, total=list.length;
+        setBusy(true,'Checking 0 of '+total+' PANs…','busy');
+
+        async function worker(){
+            while(true){
+                if(cancelled) return;
+                var i=next++;
+                if(i>=list.length) return;
+                await fetchOne(list[i]);
+                finished++;
+                $('#progressBar').css('width',(finished/total*100)+'%');
+                $('#processingMessage').html('<span class="spinner"></span>Checking '+finished+' of '+total+' PANs…');
+                categorise(); recompute(); scheduleRender();
+            }
+        }
+        var workers=[]; for(var w=0;w<Math.min(limit,total);w++) workers.push(worker());
+        await Promise.all(workers);
+
+        refreshAll();
+        showNetBanner();
+        if(cancelled) setBusy(false,'Stopped after '+finished+' of '+total+' PANs.','warn');
+        else if(stats.error) setBusy(false,'Completed '+total+' PANs · '+stats.error+' could not be checked.','warn');
+        else setBusy(false,'Completed: '+total+' of '+total+' PANs checked.','done');
+    }
+
+    $('#cancelBtn').on('click',function(){
+        cancelled=true;
+        activeXhr.forEach(function(x){ try{ x.abort(); }catch(e){} });
+        records.forEach(function(r){ if(r.status==='queued') markIssue(r,'Cancelled'); });
+        refreshAll();
+        toast('Stopped');
+    });
+
+    $('#fetchBtn').on('click',async function(){
+        // Anything still sitting in the bulk-paste box is folded in first, so a
+        // paste followed straight by "Check All PANs" is not silently dropped.
+        if(($('#panInput').val()||'').trim()){ addPans($('#panInput').val(),true); $('#panInput').val(''); }
+        var unique=panList.slice();
+        if(!unique.length){ toast('Add at least one PAN first','err'); $('#panAdd').focus(); return; }
+        var clientId=getClientId();
+        if(!clientId){
+            if($('input[name=clientType]:checked').val()==='MUG'){
+                toast('Select an IPO or enter a Client ID manually','err');
+                // the real <select> is hidden behind the in-window dropdown
+                if(!($('#mugClientId').val()||'').trim()) $('#mugIpoSelectBtn').focus();
+                else $('#mugClientId').focus();
+            } else {
+                toast("Please enter the Company's Client ID",'err'); $('#clientId').focus();
+            }
+            return;
+        }
+        $('#clientId').val(clientId);
+
+        records=[]; extraCols=[]; nameKey=''; seqNo=0; openIds={}; counters={};
+        $('#netBanner').hide(); $('#progressBar').css('width','0');
+        $('#searchBox').val('').trigger('input');
+        setStatusFilter('all',false);
+        unique.forEach(function(pan){ records.push(newRecord(pan,++seqNo)); });
+        refreshAll();
+        await runQueue(records.slice());
+    });
+
+    $('#retryBtn').on('click',async function(){
+        var failed=records.filter(function(r){ return r.status==='error'; });
+        if(!failed.length){ toast('Nothing to retry'); return; }
+        failed.forEach(function(r){ r.status='queued'; r.message=''; });
+        refreshAll();
+        await runQueue(failed);
+    });
+
+    $('#clearResults').on('click',function(){
+        records=[]; extraCols=[]; nameKey=''; seqNo=0; openIds={}; counters={};
+        $('#progressBar').css('width','0'); $('#netBanner').hide();
+        setBusy(false,'Ready.','');
+        refreshAll();
+    });
+
+    /* ================================================================== *
+     * Export
+     * ------------------------------------------------------------------
+     * A real .xlsx (OOXML) package is built by hand, because the previous
+     * SpreadsheetML 2003 .xls format cannot carry charts at all. The ZIP is
+     * written with the STORE method so no compressor is needed.
+     * ================================================================== */
+
+    /* ---- tiny ZIP writer (no compression) ---------------------------- */
+    var CRC_TABLE = (function(){
+        var t=new Int32Array(256), c, n, k;
+        for(n=0;n<256;n++){
+            c=n;
+            for(k=0;k<8;k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1);
+            t[n]=c;
+        }
+        return t;
+    })();
+    function crc32(bytes){
+        var c=-1;
+        for(var i=0;i<bytes.length;i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c>>>8);
+        return (c ^ -1)>>>0;
+    }
+    function utf8(str){
+        if(window.TextEncoder) return new TextEncoder().encode(str);
+        var s=unescape(encodeURIComponent(str)), a=new Uint8Array(s.length);
+        for(var i=0;i<s.length;i++) a[i]=s.charCodeAt(i);
+        return a;
+    }
+    function zip(files){
+        // files: [{name, data:Uint8Array}]
+        var DOS_TIME=0, DOS_DATE=20513;   // fixed 2020-01-01 so output is reproducible
+        var chunks=[], central=[], offset=0;
+        function u16(n){ return [n&0xFF,(n>>>8)&0xFF]; }
+        function u32(n){ return [n&0xFF,(n>>>8)&0xFF,(n>>>16)&0xFF,(n>>>24)&0xFF]; }
+        files.forEach(function(f){
+            var name=utf8(f.name), crc=crc32(f.data), len=f.data.length;
+            // sig, version, flags, method(0=store), time, date, crc, csize, usize, namelen, extralen
+            var local=[].concat([0x50,0x4B,0x03,0x04], u16(20), u16(0x0800), u16(0), u16(DOS_TIME), u16(DOS_DATE),
+                                u32(crc), u32(len), u32(len), u16(name.length), u16(0));
+            chunks.push(new Uint8Array(local), name, f.data);
+            central.push([].concat([0x50,0x4B,0x01,0x02], u16(20), u16(20), u16(0x0800), u16(0),
+                                   u16(DOS_TIME), u16(DOS_DATE), u32(crc), u32(len), u32(len),
+                                   u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)));
+            central.push(name);
+            offset += local.length + name.length + len;
+        });
+        var cdir=[], cdirLen=0;
+        central.forEach(function(part){
+            var a = (part instanceof Uint8Array) ? part : new Uint8Array(part);
+            cdir.push(a); cdirLen += a.length;
+        });
+        var eocd=new Uint8Array([].concat([0x50,0x4B,0x05,0x06], u16(0), u16(0),
+                                u16(files.length), u16(files.length), u32(cdirLen), u32(offset), u16(0)));
+        var all=chunks.concat(cdir,[eocd]);
+        var total=all.reduce(function(n,a){ return n+a.length; },0);
+        var out=new Uint8Array(total), at=0;
+        all.forEach(function(a){ out.set(a,at); at+=a.length; });
+        return out;
+    }
+
+    /* ---- XML helpers ------------------------------------------------- */
+    function xesc(v){
+        return String(v===undefined||v===null?'':v)
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;').replace(/'/g,'&apos;')
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'');
+    }
+    var XMLDECL='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    function colName(n){                  // 1 -> A, 27 -> AA
+        var s='';
+        while(n>0){ var r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=(n-1-r)/26; }
+        return s;
+    }
+    function ref(col,row){ return colName(col)+row; }
+
+    /* ---- what goes into the workbook --------------------------------- */
+    function exportMeta(){
+        return {
+            clientId:  getClientId(),
+            clientType:(function(){
+                var v=$('input[name=clientType]:checked').val()||'';
+                return REGISTRAR_LABEL[v]||v;
+            })(),
+            lot: basis.lot||cfg.lot, how: basis.how||'', source: basis.source||'PEMNDG'
+        };
+    }
+    // Fixed columns, then the payload's own extra columns. "Name" appears once:
+    // the payload's name key was consumed into rec.name (see isConsumedKey).
+    var FIXED_COLS = [
+        {h:'#',               get:function(r){ return r.no; },                     t:'n', w:6,  fmt:'int'},
+        {h:'Client ID',       get:function(r,m){ return m.clientId; },             t:'s', w:16},
+        {h:'PAN',             get:function(r){ return r.pan; },                    t:'s', w:14},
+        {h:'Status',          get:function(r){ return STATUS_TEXT[r.status]||r.status; }, t:'s', w:15},
+        {h:'Category',        get:function(r){ return displayCat(r.category); },    t:'s', w:14},
+        {h:'Applied Shares',  get:function(r){ return r.applied; },                t:'n', w:14, fmt:'int'},
+        {h:'Allotted Shares', get:function(r){ return r.allotted; },               t:'n', w:15, fmt:'int'},
+        {h:'Lots',            get:function(r){ return r.lots; },                   t:'n', w:8,  fmt:'int'},
+        {h:'Apps for PAN',    get:function(r){ return r.apps; },                   t:'n', w:12, fmt:'int'},
+        {h:'Name',            get:function(r){ return r.name||''; },               t:'s', w:26},
+        {h:'Category Note',   get:function(r){ return r.note||''; },               t:'s', w:42}
+    ];
+    function exportCols(){
+        return FIXED_COLS.concat(extraCols.map(function(c){
+            return {h:c, w:16, t:'s', get:function(r){
+                var v=lookup(r.item,c);
+                return (v&&typeof v==='object')?JSON.stringify(v):(v===undefined||v===null?'':v);
+            }};
+        }));
+    }
+    function exportHeaders(){ return exportCols().map(function(c){ return c.h; }); }
+    function exportRow(rec){
+        var m=exportMeta();
+        return exportCols().map(function(c){ return c.get(rec,m); });
+    }
+    /* ---- styles ------------------------------------------------------ *
+     * s= index into cellXfs:
+     *  0 default            1 title            2 header
+     *  3 int                4 rupees           5 percent
+     *  6 label (bold)       7 kpi number       8 wrapped text
+     *  9 allotted int      10 section header   11 hyperlink-ish muted
+     * ------------------------------------------------------------------ */
+    var STYLES_XML = XMLDECL+
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+      '<numFmts count="3">'+
+        '<numFmt numFmtId="164" formatCode="#,##0"/>'+
+        '<numFmt numFmtId="165" formatCode="0.0%"/>'+
+        '<numFmt numFmtId="166" formatCode="&quot;₹&quot;#,##0"/>'+
+      '</numFmts>'+
+      '<fonts count="7">'+
+        '<font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>'+
+        '<font><b/><sz val="18"/><color rgb="FF1D4ED8"/><name val="Calibri"/><family val="2"/></font>'+
+        '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>'+
+        '<font><b/><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>'+
+        '<font><b/><sz val="16"/><color rgb="FF1D4ED8"/><name val="Calibri"/><family val="2"/></font>'+
+        '<font><sz val="10"/><color rgb="FF667085"/><name val="Calibri"/><family val="2"/></font>'+
+        '<font><b/><sz val="12"/><color rgb="FF344054"/><name val="Calibri"/><family val="2"/></font>'+
+      '</fonts>'+
+      '<fills count="6">'+
+        '<fill><patternFill patternType="none"/></fill>'+
+        '<fill><patternFill patternType="gray125"/></fill>'+
+        '<fill><patternFill patternType="solid"><fgColor rgb="FF1D4ED8"/><bgColor indexed="64"/></patternFill></fill>'+
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFECFDF3"/><bgColor indexed="64"/></patternFill></fill>'+
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFF2F4F7"/><bgColor indexed="64"/></patternFill></fill>'+
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFFEF3F2"/><bgColor indexed="64"/></patternFill></fill>'+
+      '</fills>'+
+      '<borders count="2">'+
+        '<border><left/><right/><top/><bottom/><diagonal/></border>'+
+        '<border><left style="thin"><color rgb="FFD0D5DD"/></left><right style="thin"><color rgb="FFD0D5DD"/></right>'+
+          '<top style="thin"><color rgb="FFD0D5DD"/></top><bottom style="thin"><color rgb="FFD0D5DD"/></bottom><diagonal/></border>'+
+      '</borders>'+
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+      '<cellXfs count="12">'+
+        '<xf numFmtId="0"   fontId="0" fillId="0" borderId="0" xfId="0"/>'+
+        '<xf numFmtId="0"   fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'+
+        '<xf numFmtId="0"   fontId="2" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">'+
+          '<alignment horizontal="center" vertical="center" wrapText="1"/></xf>'+
+        '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'+
+        '<xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'+
+        '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'+
+        '<xf numFmtId="0"   fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'+
+        '<xf numFmtId="164" fontId="4" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1">'+
+          '<alignment horizontal="right"/></xf>'+
+        '<xf numFmtId="0"   fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1">'+
+          '<alignment vertical="top" wrapText="1"/></xf>'+
+        '<xf numFmtId="164" fontId="3" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>'+
+        '<xf numFmtId="0"   fontId="6" fillId="0" borderId="0" xfId="0" applyFont="1"/>'+
+        '<xf numFmtId="0"   fontId="5" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1">'+
+          '<alignment vertical="top" wrapText="1"/></xf>'+
+      '</cellXfs>'+
+      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'+
+      '<dxfs count="4">'+
+        '<dxf><font><color rgb="FF067647"/><b/></font><fill><patternFill><bgColor rgb="FFECFDF3"/></patternFill></fill></dxf>'+
+        '<dxf><font><color rgb="FF667085"/></font><fill><patternFill><bgColor rgb="FFF2F4F7"/></patternFill></fill></dxf>'+
+        '<dxf><font><color rgb="FFB42318"/></font><fill><patternFill><bgColor rgb="FFFEF3F2"/></patternFill></fill></dxf>'+
+        '<dxf><font><color rgb="FFB54708"/><b/></font><fill><patternFill><bgColor rgb="FFFFFAEB"/></patternFill></fill></dxf>'+
+      '</dxfs>'+
+      '<tableStyles count="0" defaultTableStyle="TableStyleMedium2"/>'+
+    '</styleSheet>';
+
+    /* ---- worksheet building ------------------------------------------ */
+    // cell: {v:value, t:'n'|'s'|'f', s:styleIndex}
+    function cellXml(col,row,c){
+        if(c===null||c===undefined) return '';
+        var r=ref(col,row), s=(c.s!==undefined?' s="'+c.s+'"':'');
+        if(c.t==='f') return '<c r="'+r+'"'+s+'><f>'+xesc(c.v)+'</f></c>';
+        if(c.t==='n'){
+            var n=Number(c.v);
+            if(!isFinite(n)) n=0;
+            return '<c r="'+r+'"'+s+'><v>'+n+'</v></c>';
+        }
+        if(c.v===''||c.v===null||c.v===undefined) return s?'<c r="'+r+'"'+s+'/>':'';
+        return '<c r="'+r+'"'+s+' t="inlineStr"><is><t xml:space="preserve">'+xesc(c.v)+'</t></is></c>';
+    }
+    // rows: array of arrays of cells (null = empty). Extra parts are raw XML
+    // fragments that must appear in schema order after </sheetData>.
+    function sheetXml(rows,opts){
+        opts=opts||{};
+        var body='', maxCol=1;
+        rows.forEach(function(cells,i){
+            if(!cells || !cells.length) return;
+            var rowNo=i+1, inner='';
+            for(var c=0;c<cells.length;c++) inner+=cellXml(c+1,rowNo,cells[c]);
+            if(cells.length>maxCol) maxCol=cells.length;
+            if(inner) body+='<row r="'+rowNo+'"'+(opts.rowH&&opts.rowH[rowNo]?' ht="'+opts.rowH[rowNo]+'" customHeight="1"':'')+'>'+inner+'</row>';
+        });
+        var dim='A1:'+ref(maxCol,Math.max(1,rows.length));
+        var pane = opts.freeze ?
+            '<pane ySplit="'+opts.freeze+'" topLeftCell="A'+(opts.freeze+1)+'" activePane="bottomLeft" state="frozen"/>'+
+            '<selection pane="bottomLeft" activeCell="A'+(opts.freeze+1)+'" sqref="A'+(opts.freeze+1)+'"/>' : '';
+        var cols='';
+        if(opts.widths && opts.widths.length){
+            cols='<cols>'+opts.widths.map(function(w,i){
+                return '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>';
+            }).join('')+'</cols>';
+        }
+        return XMLDECL+
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '+
+                'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+            '<dimension ref="'+dim+'"/>'+
+            '<sheetViews><sheetView'+(opts.selected?' tabSelected="1"':'')+' showGridLines="'+(opts.grid===false?0:1)+'" workbookViewId="0">'+
+              pane+'</sheetView></sheetViews>'+
+            '<sheetFormatPr defaultRowHeight="15"/>'+
+            cols+
+            '<sheetData>'+body+'</sheetData>'+
+            (opts.autoFilter?'<autoFilter ref="'+opts.autoFilter+'"/>':'')+
+            (opts.merges&&opts.merges.length?'<mergeCells count="'+opts.merges.length+'">'+
+                opts.merges.map(function(m){ return '<mergeCell ref="'+m+'"/>'; }).join('')+'</mergeCells>':'')+
+            (opts.cf||'')+
+            '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>'+
+            (opts.drawing?'<drawing r:id="rId1"/>':'')+
+            '</worksheet>';
+    }
+    function S(v,s){ return {v:v, t:'s', s:s}; }
+    function N(v,s){ return {v:v, t:'n', s:s}; }
+    function F(v,s){ return {v:v, t:'f', s:s}; }
+    var FMT_STYLE={int:3, rs:4, pct:5};
+
+    /* Sheet 2/3 — the data grids. */
+    function dataSheetXml(list,selected){
+        var cols=exportCols(), m=exportMeta(), rows=[];
+        rows.push(cols.map(function(c){ return S(c.h,2); }));
+        list.forEach(function(rec){
+            rows.push(cols.map(function(c){
+                var v=c.get(rec,m);
+                if(c.t==='n') return N(v, FMT_STYLE[c.fmt]||3);
+                if(c.h==='Category Note') return S(v,8);
+                return S(v,8);
+            }));
+        });
+        // SUBTOTAL respects the AutoFilter, so the totals follow the visible rows.
+        var last=rows.length, tot=[];
+        cols.forEach(function(c,i){
+            if(i===0){ tot.push(S('Totals (visible rows)',6)); return; }
+            if(c.t==='n' && c.h!=='#' && c.h!=='Apps for PAN'){
+                tot.push(F('SUBTOTAL(109,'+ref(i+1,2)+':'+ref(i+1,last)+')', FMT_STYLE[c.fmt]||3));
+            } else tot.push(S('',6));
+        });
+        rows.push(tot);
+
+        var nCols=cols.length;
+        var catCol=ref(5,2)+':'+ref(5,last);
+        var allotCol=ref(7,2)+':'+ref(7,last);
+        var statusCol=ref(4,2)+':'+ref(4,last);
+        var cf =
+            '<conditionalFormatting sqref="'+statusCol+'">'+
+              '<cfRule type="cellIs" dxfId="0" priority="1" operator="equal"><formula>"Allotted"</formula></cfRule>'+
+              '<cfRule type="cellIs" dxfId="1" priority="2" operator="equal"><formula>"No Allotment"</formula></cfRule>'+
+              '<cfRule type="cellIs" dxfId="2" priority="3" operator="equal"><formula>"Not Found"</formula></cfRule>'+
+            '</conditionalFormatting>'+
+            '<conditionalFormatting sqref="'+catCol+'">'+
+              '<cfRule type="cellIs" dxfId="3" priority="4" operator="equal"><formula>"BHNI"</formula></cfRule>'+
+            '</conditionalFormatting>'+
+            '<conditionalFormatting sqref="'+allotCol+'">'+
+              '<cfRule type="dataBar" priority="5"><dataBar><cfvo type="num" val="0"/><cfvo type="max"/>'+
+              '<color rgb="FF1D4ED8"/></dataBar></cfRule>'+
+            '</conditionalFormatting>';
+        return sheetXml(rows,{
+            freeze:1, selected:selected,
+            autoFilter:'A1:'+ref(nCols,last),
+            widths:cols.map(function(c){ return c.w||14; }),
+            cf:(list.length?cf:''),
+            rowH:{1:30}
+        });
+    }
+
+    /* Sheet 4 — one row per category with cross-sheet COUNTIF/SUMIF.
+     * Column A must hold the SAME text as 'All Data'!E (displayCat output),
+     * otherwise every COUNTIF/SUMIF silently returns 0. Categories that share a
+     * display label (HNI + SHNI -> "S-HNI") collapse into one row so no PAN is
+     * counted twice. */
+    function categoryRows(){
+        var br=categoryBreakdown(), out=[], seen={};
+        br.order.forEach(function(cat){
+            var label=displayCat(cat);
+            if(seen[label]!==undefined){ out[seen[label]].keys.push(cat); return; }
+            seen[label]=out.length;
+            out.push({label:label, keys:[cat]});
+        });
+        if(!out.length) out.push({label:'N/A', keys:['N/A']});
+        return out;
+    }
+    function categorySheetXml(){
+        var cats=categoryRows();
+        var lastData=records.length+1;   // 'All Data' row 1 is the header; the
+                                         // SUBTOTAL row below it is excluded.
+        var lastCatRow=4+cats.length;
+        var totalRow=lastCatRow+1;
+        var appliedBasis=(basis.source==='applied shares');
+        var rows=[];
+        rows.push([S('Category breakdown',1)]);
+        rows.push([S(basis.how||'Category from applied-share size (smallest = Retail, largest = B-HNI).',11)]);
+        rows.push([]);
+        rows.push([S('Category',2),S('Source',2),S('PANs',2),S('Allotted PANs',2),
+                   S('Applied Shares',2),S('Allotted Shares',2),S('Hit Rate',2)]);
+        cats.forEach(function(cat,i){
+            var r=5+i, q="'All Data'!$E$2:$E$"+lastData;
+            var src = cat.label==='N/A'
+                ? (appliedBasis?'No applied/allotted quantity in response':'No PEMNDG/category in response')
+                : (appliedBasis?'Applied-share size bucket':'Registrar field ('+(basis.source||'PEMNDG')+')');
+            rows.push([
+                S(cat.label,6),
+                S(src,8),
+                F('COUNTIF('+q+',A'+r+')',3),
+                F('COUNTIFS('+q+',A'+r+",'All Data'!$D$2:$D$"+lastData+',"Allotted")',3),
+                F('SUMIF('+q+',A'+r+",'All Data'!$F$2:$F$"+lastData+')',3),
+                F('SUMIF('+q+',A'+r+",'All Data'!$G$2:$G$"+lastData+')',3),
+                F('IF(C'+r+'=0,0,D'+r+'/C'+r+')',5)
+            ]);
+        });
+        rows.push([S('All categories',6),S('',8),
+                   F('SUM(C5:C'+lastCatRow+')',3),F('SUM(D5:D'+lastCatRow+')',3),
+                   F('SUM(E5:E'+lastCatRow+')',3),F('SUM(F5:F'+lastCatRow+')',3),
+                   F('IF(C'+totalRow+'=0,0,D'+totalRow+'/C'+totalRow+')',5)]);
+        rows.push([]);
+        rows.push([S(appliedBasis
+                     ? 'Categories are derived from applied-share size (fallback: allotted shares when applied is 0): '+
+                       'smallest = Retail, largest = B-HNI, in between = S-HNI. PEMNDG is shown in the row details '+
+                       'only. Filter chips on the site use the same values.'
+                     : 'Category values come from the registrar (MUFG PEMNDG / KFINTECH category). '+
+                       'Filter chips on the site use the same values.',11)]);
+        return sheetXml(rows,{widths:[24,36,10,15,16,16,11],
+            merges:['A2:G2','A'+ (totalRow+2)+':G'+(totalRow+2)],
+            rowH:{2:30}});
+    }
+    /* Sheet 1 — Dashboard. Columns J–K hold the series the charts read from;
+     * the charts themselves are anchored over columns A–I. */
+    function chartData(){
+        var statusRows=[['Allotted',stats.alloted],['No Allotment',stats.none],
+                        ['Not Found',stats.notfound],['Issue',stats.error],['Not Checked',stats.queued]]
+                       .filter(function(r){ return r[1]>0; });
+        if(!statusRows.length) statusRows=[['No data',0]];
+        var br=categoryBreakdown();
+        var catRows=br.order.map(function(c){ return [displayCat(c), br.counts[c]||0]; })
+                            .filter(function(r){ return r[1]>0; });
+        if(!catRows.length) catRows=[['No category yet',0]];
+        var top=records.filter(function(r){ return r.allotted>0; })
+                       .sort(function(a,b){ return b.allotted-a.allotted; })
+                       .slice(0,10).map(function(r){ return [r.pan,r.allotted]; });
+        if(!top.length) top=[['No allotment yet',0]];
+        return {status:statusRows, cat:catRows, top:top};
+    }
+    function dashboardSheetXml(cd){
+        var m=exportMeta(), rows=[], i;
+        function put(row,col,cell){
+            rows[row-1]=rows[row-1]||[];
+            while(rows[row-1].length<col-1) rows[row-1].push(null);
+            rows[row-1][col-1]=cell;
+        }
+        put(1,1,S('IPO Allotment Summary',1));
+        var meta=[
+            ['PANs checked',        stats.total,  'int'],
+            ['Allotted',           stats.alloted,'int'],
+            ['No allotment',       stats.none,   'int'],
+            ['Not found',          stats.notfound,'int'],
+            ['Errors',             stats.error,  'int'],
+            ['Total applied shares',   stats.applied, 'int'],
+            ['Total allotted shares',  stats.allotted,'int'],
+            ['Allotment rate',      stats.total?stats.alloted/stats.total:0, 'pct']
+        ];
+        meta.forEach(function(row,k){
+            put(3+k,1,S(row[0],6));
+            put(3+k,2,N(row[1],row[2]==='pct'?5:7));
+        });
+        var info=[
+            ['Registrar / client type', m.clientType],
+            ['Client ID',              m.clientId||'—'],
+            ['Lot size (shares)',      m.lot?nf(m.lot):'—'],
+            ['Category field',         m.source||'PEMNDG']
+        ];
+        info.forEach(function(row,k){
+            put(12+k,1,S(row[0],6));
+            put(12+k,2,S(String(row[1]),8));
+        });
+        put(17,1,S('Category source',10));
+        put(18,1,S(m.how,11));
+
+        // chart series, kept in J/K so the anchored charts do not cover them
+        put(1,10,S('Status',2));            put(1,11,S('PANs',2));
+        cd.status.forEach(function(r,k){ put(2+k,10,S(r[0],8)); put(2+k,11,N(r[1],3)); });
+        var catTop=2+cd.status.length+1;
+        put(catTop,10,S('Category',2));      put(catTop,11,S('PANs',2));
+        cd.cat.forEach(function(r,k){ put(catTop+1+k,10,S(r[0],8)); put(catTop+1+k,11,N(r[1],3)); });
+        var topTop=catTop+1+cd.cat.length+1;
+        put(topTop,10,S('PAN',2));           put(topTop,11,S('Allotted',2));
+        cd.top.forEach(function(r,k){ put(topTop+1+k,10,S(r[0],8)); put(topTop+1+k,11,N(r[1],3)); });
+
+        cd.range={
+            statusCat:'Dashboard!$J$2:$J$'+(1+cd.status.length),
+            statusVal:'Dashboard!$K$2:$K$'+(1+cd.status.length),
+            catCat:'Dashboard!$J$'+(catTop+1)+':$J$'+(catTop+cd.cat.length),
+            catVal:'Dashboard!$K$'+(catTop+1)+':$K$'+(catTop+cd.cat.length),
+            topCat:'Dashboard!$J$'+(topTop+1)+':$J$'+(topTop+cd.top.length),
+            topVal:'Dashboard!$K$'+(topTop+1)+':$K$'+(topTop+cd.top.length)
+        };
+        for(i=0;i<rows.length;i++) if(!rows[i]) rows[i]=[];
+        return sheetXml(rows,{
+            selected:true, grid:false, drawing:true,
+            widths:[26,18,10,10,10,10,10,10,10,24,12],
+            merges:['A20:H20'], rowH:{1:26,20:46}
+        });
+    }
+    /* ---- charts ------------------------------------------------------- */
+    var CHART_NS='xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" '+
+                 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '+
+                 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    var SLICE_COLORS=['FF067647','FF98A2B3','FFB54708','FFB42318','FF1D4ED8','FF7C3AED'];
+
+    function chTitle(text){
+        return '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p>'+
+               '<a:pPr><a:defRPr sz="1200" b="1"><a:solidFill><a:srgbClr val="FF344054"/></a:solidFill></a:defRPr></a:pPr>'+
+               '<a:r><a:rPr lang="en-IN" sz="1200" b="1"/><a:t>'+xesc(text)+'</a:t></a:r>'+
+               '</a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/>';
+    }
+    function strRefXml(tag,formula,labels){
+        return '<c:'+tag+'><c:strRef><c:f>'+xesc(formula)+'</c:f><c:strCache>'+
+               '<c:ptCount val="'+labels.length+'"/>'+
+               labels.map(function(v,i){ return '<c:pt idx="'+i+'"><c:v>'+xesc(v)+'</c:v></c:pt>'; }).join('')+
+               '</c:strCache></c:strRef></c:'+tag+'>';
+    }
+    function numRefXml(tag,formula,values){
+        return '<c:'+tag+'><c:numRef><c:f>'+xesc(formula)+'</c:f><c:numCache>'+
+               '<c:formatCode>#,##0</c:formatCode><c:ptCount val="'+values.length+'"/>'+
+               values.map(function(v,i){ return '<c:pt idx="'+i+'"><c:v>'+Number(v)+'</c:v></c:pt>'; }).join('')+
+               '</c:numCache></c:numRef></c:'+tag+'>';
+    }
+    function dLbls(showVal,showPct){
+        return '<c:dLbls><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>'+
+               '<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900" b="1"/></a:pPr><a:endParaRPr lang="en-IN"/></a:p></c:txPr>'+
+               '<c:showLegendKey val="0"/><c:showVal val="'+(showVal?1:0)+'"/><c:showCatName val="0"/>'+
+               '<c:showSerName val="0"/><c:showPercent val="'+(showPct?1:0)+'"/><c:showBubbleSize val="0"/></c:dLbls>';
+    }
+    function doughnutChartXml(title,catRef,valRef,labels,values){
+        var pts=labels.map(function(_,i){
+            return '<c:dPt><c:idx val="'+i+'"/><c:bubble3D val="0"/><c:spPr>'+
+                   '<a:solidFill><a:srgbClr val="'+SLICE_COLORS[i%SLICE_COLORS.length]+'"/></a:solidFill>'+
+                   '<a:ln w="19050"><a:solidFill><a:srgbClr val="FFFFFFFF"/></a:solidFill></a:ln></c:spPr></c:dPt>';
+        }).join('');
+        return XMLDECL+'<c:chartSpace '+CHART_NS+'><c:roundedCorners val="0"/><c:chart>'+
+            chTitle(title)+
+            '<c:plotArea><c:layout/><c:doughnutChart><c:varyColors val="1"/>'+
+              '<c:ser><c:idx val="0"/><c:order val="0"/>'+
+                '<c:tx><c:strRef><c:f>Dashboard!$K$1</c:f><c:strCache><c:ptCount val="1"/>'+
+                  '<c:pt idx="0"><c:v>PANs</c:v></c:pt></c:strCache></c:strRef></c:tx>'+
+                pts+dLbls(true,false)+
+                strRefXml('cat',catRef,labels)+numRefXml('val',valRef,values)+
+              '</c:ser>'+dLbls(true,false)+
+              '<c:firstSliceAng val="0"/><c:holeSize val="52"/>'+
+            '</c:doughnutChart></c:plotArea>'+
+            '<c:legend><c:legendPos val="b"/><c:overlay val="0"/>'+
+              '<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900"/></a:pPr><a:endParaRPr lang="en-IN"/></a:p></c:txPr>'+
+            '</c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>';
+    }
+    function barChartXml(title,dir,color,axTitle,catRef,valRef,labels,values){
+        var idBase = dir==='bar' ? 111111111 : 222222222;
+        return XMLDECL+'<c:chartSpace '+CHART_NS+'><c:roundedCorners val="0"/><c:chart>'+
+            chTitle(title)+
+            '<c:plotArea><c:layout/>'+
+            '<c:barChart><c:barDir val="'+dir+'"/><c:grouping val="clustered"/><c:varyColors val="0"/>'+
+              '<c:ser><c:idx val="0"/><c:order val="0"/>'+
+                '<c:tx><c:strRef><c:f>Dashboard!$K$1</c:f><c:strCache><c:ptCount val="1"/>'+
+                  '<c:pt idx="0"><c:v>'+xesc(axTitle)+'</c:v></c:pt></c:strCache></c:strRef></c:tx>'+
+                '<c:spPr><a:solidFill><a:srgbClr val="'+color+'"/></a:solidFill><a:ln><a:noFill/></a:ln></c:spPr>'+
+                '<c:invertIfNegative val="0"/>'+dLbls(true,false)+
+                strRefXml('cat',catRef,labels)+numRefXml('val',valRef,values)+
+              '</c:ser>'+dLbls(true,false)+
+              '<c:gapWidth val="60"/><c:overlap val="-27"/>'+
+              '<c:axId val="'+idBase+'"/><c:axId val="'+(idBase+1)+'"/>'+
+            '</c:barChart>'+
+            '<c:catAx><c:axId val="'+idBase+'"/><c:scaling><c:orientation val="minMax"/></c:scaling>'+
+              '<c:delete val="0"/><c:axPos val="'+(dir==='bar'?'l':'b')+'"/>'+
+              '<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900"/></a:pPr><a:endParaRPr lang="en-IN"/></a:p></c:txPr>'+
+              '<c:crossAx val="'+(idBase+1)+'"/></c:catAx>'+
+            '<c:valAx><c:axId val="'+(idBase+1)+'"/><c:scaling><c:orientation val="minMax"/></c:scaling>'+
+              '<c:delete val="0"/><c:axPos val="'+(dir==='bar'?'b':'l')+'"/>'+
+              '<c:majorGridlines/><c:numFmt formatCode="#,##0" sourceLinked="0"/>'+
+              '<c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>'+
+              '<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900"/></a:pPr><a:endParaRPr lang="en-IN"/></a:p></c:txPr>'+
+              '<c:crossAx val="'+idBase+'"/></c:valAx>'+
+            '</c:plotArea>'+
+            '<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>';
+    }
+    function drawingXml(){
+        var boxes=[{id:1,name:'Status mix',   from:[0,21], to:[4,41]},
+                   {id:2,name:'Top allotted',from:[4,21], to:[9,41]},
+                   {id:3,name:'Category mix',from:[0,42], to:[9,62]}];
+        return XMLDECL+
+        '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" '+
+                  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '+
+                  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+        boxes.map(function(b){
+            return '<xdr:twoCellAnchor>'+
+              '<xdr:from><xdr:col>'+b.from[0]+'</xdr:col><xdr:colOff>0</xdr:colOff>'+
+                '<xdr:row>'+b.from[1]+'</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'+
+              '<xdr:to><xdr:col>'+b.to[0]+'</xdr:col><xdr:colOff>0</xdr:colOff>'+
+                '<xdr:row>'+b.to[1]+'</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>'+
+              '<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr>'+
+                '<xdr:cNvPr id="'+(b.id+1)+'" name="'+xesc(b.name)+'"/><xdr:cNvGraphicFramePr/>'+
+              '</xdr:nvGraphicFramePr>'+
+              '<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>'+
+              '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">'+
+                '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" '+
+                        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '+
+                        'r:id="rId'+b.id+'"/>'+
+              '</a:graphicData></a:graphic></xdr:graphicFrame>'+
+              '<xdr:clientData/></xdr:twoCellAnchor>';
+        }).join('')+'</xdr:wsDr>';
+    }
+    /* ---- package ------------------------------------------------------ */
+    var SHEET_NAMES=['Dashboard','All Data','Allotted Only','By Category'];
+    function buildXlsx(){
+        var cd=chartData();
+        var dash=dashboardSheetXml(cd);          // also fills cd.range
+        var allotted=sortedRecords().filter(function(r){ return r.allotted>0; });
+        var sheets=[
+            dash,
+            dataSheetXml(sortedRecords(),false),
+            dataSheetXml(allotted,false),
+            categorySheetXml()
+        ];
+        var charts=[
+            doughnutChartXml('Allotment status', cd.range.statusCat, cd.range.statusVal,
+                cd.status.map(function(r){ return r[0]; }), cd.status.map(function(r){ return r[1]; })),
+            barChartXml('Top '+cd.top.length+' allotted PANs','bar','FF1D4ED8','Allotted shares',
+                cd.range.topCat, cd.range.topVal,
+                cd.top.map(function(r){ return r[0]; }), cd.top.map(function(r){ return r[1]; })),
+            barChartXml('PANs by category','col','FF7C3AED','PANs',
+                cd.range.catCat, cd.range.catVal,
+                cd.cat.map(function(r){ return r[0]; }), cd.cat.map(function(r){ return r[1]; }))
+        ];
+
+        var contentTypes=XMLDECL+
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+          '<Default Extension="xml" ContentType="application/xml"/>'+
+          '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
+          '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+
+          sheets.map(function(_,i){
+            return '<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" '+
+                   'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+          }).join('')+
+          '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>'+
+          charts.map(function(_,i){
+            return '<Override PartName="/xl/charts/chart'+(i+1)+'.xml" '+
+                   'ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>';
+          }).join('')+
+          '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'+
+          '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'+
+        '</Types>';
+
+        var rootRels=XMLDECL+
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'+
+          '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'+
+          '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'+
+        '</Relationships>';
+
+        var workbook=XMLDECL+
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '+
+                  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+          '<workbookPr/>'+
+          '<bookViews><workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="14000" activeTab="0"/></bookViews>'+
+          '<sheets>'+SHEET_NAMES.map(function(n,i){
+            return '<sheet name="'+xesc(n)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>';
+          }).join('')+'</sheets>'+
+          '<calcPr calcId="171027" fullCalcOnLoad="1"/>'+
+        '</workbook>';
+
+        var wbRels=XMLDECL+
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+          sheets.map(function(_,i){
+            return '<Relationship Id="rId'+(i+1)+'" '+
+              'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '+
+              'Target="worksheets/sheet'+(i+1)+'.xml"/>';
+          }).join('')+
+          '<Relationship Id="rId'+(sheets.length+1)+'" '+
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'+
+        '</Relationships>';
+
+        var sheet1Rels=XMLDECL+
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" '+
+            'Target="../drawings/drawing1.xml"/>'+
+        '</Relationships>';
+
+        var drawingRels=XMLDECL+
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+          charts.map(function(_,i){
+            return '<Relationship Id="rId'+(i+1)+'" '+
+              'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" '+
+              'Target="../charts/chart'+(i+1)+'.xml"/>';
+          }).join('')+
+        '</Relationships>';
+
+        var stamp=new Date().toISOString().replace(/\.\d+Z$/,'Z');
+        var core=XMLDECL+
+        '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '+
+            'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" '+
+            'xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'+
+          '<dc:title>IPO Allotment Status</dc:title>'+
+          '<dc:subject>Client ID '+xesc(exportMeta().clientId||'—')+'</dc:subject>'+
+          '<dc:creator>IPO Allotment Checker</dc:creator>'+
+          '<cp:lastModifiedBy>IPO Allotment Checker</cp:lastModifiedBy>'+
+          '<dcterms:created xsi:type="dcterms:W3CDTF">'+stamp+'</dcterms:created>'+
+          '<dcterms:modified xsi:type="dcterms:W3CDTF">'+stamp+'</dcterms:modified>'+
+        '</cp:coreProperties>';
+
+        var app=XMLDECL+
+        '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" '+
+            'xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'+
+          '<Application>Microsoft Excel</Application><DocSecurity>0</DocSecurity><ScaleCrop>false</ScaleCrop>'+
+          '<HeadingPairs><vt:vector size="2" baseType="variant">'+
+            '<vt:variant><vt:lpstr>Worksheets</vt:lpstr></vt:variant>'+
+            '<vt:variant><vt:i4>'+sheets.length+'</vt:i4></vt:variant></vt:vector></HeadingPairs>'+
+          '<TitlesOfParts><vt:vector size="'+sheets.length+'" baseType="lpstr">'+
+            SHEET_NAMES.map(function(n){ return '<vt:lpstr>'+xesc(n)+'</vt:lpstr>'; }).join('')+
+          '</vt:vector></TitlesOfParts>'+
+        '</Properties>';
+
+        var files=[
+            {name:'[Content_Types].xml', data:utf8(contentTypes)},
+            {name:'_rels/.rels',         data:utf8(rootRels)},
+            {name:'docProps/core.xml',   data:utf8(core)},
+            {name:'docProps/app.xml',    data:utf8(app)},
+            {name:'xl/workbook.xml',     data:utf8(workbook)},
+            {name:'xl/_rels/workbook.xml.rels', data:utf8(wbRels)},
+            {name:'xl/styles.xml',       data:utf8(STYLES_XML)},
+            {name:'xl/worksheets/_rels/sheet1.xml.rels', data:utf8(sheet1Rels)},
+            {name:'xl/drawings/drawing1.xml', data:utf8(drawingXml())},
+            {name:'xl/drawings/_rels/drawing1.xml.rels', data:utf8(drawingRels)}
+        ];
+        sheets.forEach(function(x,i){ files.push({name:'xl/worksheets/sheet'+(i+1)+'.xml', data:utf8(x)}); });
+        charts.forEach(function(x,i){ files.push({name:'xl/charts/chart'+(i+1)+'.xml', data:utf8(x)}); });
+        return zip(files);
+    }
+
+    function download(content,name,type){
+        var blob=new Blob([content],{type:type});
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a');
+        a.href=url; a.download=name; a.rel='noopener';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); },2000);
+    }
+    $('#exportExcel').on('click',function(){
+        if(!records.length){ toast('Nothing to export yet','err'); return; }
+        categorise(); recompute();
+        try{
+            download(buildXlsx(),'ipo_allotment.xlsx',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            toast('Workbook downloaded — 4 sheets, 3 charts','ok');
+        }catch(e){ toast('Export failed: '+e.message,'err'); }
+    });
+    $('#exportCsv').on('click',function(){
+        if(!records.length){ toast('Nothing to export yet','err'); return; }
+        categorise(); recompute();
+        var rows=[exportHeaders()].concat(sortedRecords().map(exportRow));
+        var csv=rows.map(function(r){
+            return r.map(function(v){ return '"'+String(v===undefined||v===null?'':v).replace(/"/g,'""')+'"'; }).join(',');
+        }).join('\r\n');
+        download(String.fromCharCode(0xFEFF)+csv,'ipo_allotment.csv','text/csv;charset=utf-8;');
+        toast('CSV downloaded','ok');
+    });
+
+    /* ------------------------------------------------------------------ *
+     * PAN list — chips, persisted in localStorage as JSON so the list
+     * survives a refresh. Every PAN is one tappable chip with its own
+     * remove button, which keeps long PANs readable (a textarea wrapped
+     * them mid-PAN) and lets a chip jump to its own result row.
+     * ------------------------------------------------------------------ */
+    var PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+
+    /* Three lists make up what is on screen:
+     *   sharedPans - the append-only list from /api/pans, same for every visitor
+     *   localPans  - added here but not yet acknowledged by the server
+     *   hiddenPans - shared PANs this browser has hidden for itself only
+     * panList is the merge of the three and is what the rest of the app uses.
+     *
+     * sharedPans starts from the cached copy of the last successful fetch (so a
+     * refresh shows the full list immediately, before the network answers) and
+     * falls back to BASELINE_PANS the very first time. */
+    var sharedPans = loadJson('sharedPans',null) || splitPans(BASELINE_PANS);
+    var localPans  = loadLocalPans();
+    var hiddenPans = loadJson('hiddenPans',[]);
+    var panList    = [];
+    var sharedOk   = false;          // has a GET /api/pans ever succeeded?
+    rebuildList();
+
+    function loadJson(key,fallback){
+        var raw=store.get(key,null);
+        if(raw){
+            try{
+                var v=JSON.parse(raw);
+                if(Object.prototype.toString.call(v)==='[object Array]') return v.map(String).filter(Boolean);
+            }catch(e){}
+        }
+        return fallback;
+    }
+    function loadLocalPans(){
+        var arr=loadJson('panList',null);
+        // migrate the older free-text value, if any
+        if(!arr) arr=splitPans(store.get('pans',''));
+        return arr;
+    }
+    function isShared(pan){ return sharedPans.indexOf(pan)>=0; }
+    function rebuildList(){
+        // Anything the shared list has accepted stops counting
+        // as "yours", so the local list empties itself once a push lands.
+        localPans = localPans.filter(function(p){ return !isShared(p); });
+        var out=[], seen={};
+        sharedPans.forEach(function(p){
+            if(hiddenPans.indexOf(p)>=0 || seen[p]) return;
+            seen[p]=1; out.push(p);
+        });
+        localPans.forEach(function(p){ if(!seen[p]){ seen[p]=1; out.push(p); } });
+        panList=out;
+    }
+    function savePans(){
+        rebuildList();
+        store.set('panList',JSON.stringify(localPans));
+        store.set('hiddenPans',JSON.stringify(hiddenPans));
+        store.set('pans',localPans.join(','));   // keeps older copies of the page working
+        // Read it straight back: this is what must survive a refresh.
+        var back=store.get('panList','');
+        var saved = store.ok && back===JSON.stringify(localPans);
+        // Only surfaced when it fails: a green "saved" badge next to the shared
+        // badge was two pills saying almost the same thing.
+        $('#panSaveState').text(saved ? 'saved on this device' : 'NOT saved — storage is blocked')
+                          .toggleClass('err',!saved).toggleClass('hidden',saved);
+        return saved;
+    }
+    /* ---- shared list (append-only, /api/pans) ------------------------ */
+    var pansBase='';                 // endpoint that last answered, reused for POST
+
+    // Same host resolution as the MUFG proxy, so a custom proxy URL or the
+    // GitHub Pages -> Vercel hop keeps working without a second setting.
+    function pansEndpoints(){
+        var out=[], seen={};
+        mugProxyCandidates().forEach(function(u){
+            var e=String(u).replace(/\/api\/proxy\/?$/,'/api/pans');
+            if(e===u && !/\/api\/pans$/.test(e)) return;   // not a proxy-shaped URL
+            if(!seen[e]){ seen[e]=1; out.push(e); }
+        });
+        if(!out.length) out.push('/api/pans');
+        return out;
+    }
+    /* 'boot' until the first answer, then:
+     *   'ok'    - the Redis-backed list answered; adds reach other people
+     *   'setup' - the API is there but has no store yet (HTTP 501)
+     *   'down'  - no endpoint answered at all
+     * Only 'down' is an error. 'setup' is a configuration step, so it gets a
+     * neutral badge and instructions instead of a red warning. */
+    var sharedMode='boot';
+    function setSyncState(text,kind,linkText,linkId){
+        var $s=$('#panSyncState').removeClass('err info busy');
+        if(kind) $s.addClass(kind);
+        $s.empty().append(document.createTextNode(text));
+        if(linkText) $s.append(document.createTextNode(' ')).append($('<a href="#"></a>').attr('id',linkId).text(linkText));
+    }
+    function paintSharedBadge(extra){
+        if(sharedMode==='ok'){
+            setSyncState(extra || ('shared with everyone · '+sharedPans.length+' PANs'),'');
+        } else if(sharedMode==='setup'){
+            setSyncState(extra || 'sharing off — this device only','info','how to turn it on','shareSetupLink');
+        } else {
+            setSyncState(extra || 'shared list unreachable — this device only','err','retry','sharedRetry');
+        }
+    }
+    function showShareSetup(on){
+        $('#shareSetup').toggleClass('hidden',!on);
+        if(!on) store.set('shareSetupHidden','1');
+    }
+    $(document).on('click','#shareSetupLink',function(e){
+        e.preventDefault();
+        showShareSetup($('#shareSetup').hasClass('hidden'));
+    });
+    $(document).on('click','#shareSetupClose',function(){ showShareSetup(false); });
+    $(document).on('click','#sharedRetry',function(e){ e.preventDefault(); syncShared(false); });
+    async function fetchShared(){
+        var eps=pansEndpoints(), lastErr=null, setupErr=null;
+        for(var i=0;i<eps.length;i++){
+            try{
+                var r=await fetch(eps[i],{headers:{Accept:'application/json'}});
+                var j=await r.json().catch(function(){ return null; });
+                // 501 = the function is deployed but no Redis store is wired to
+                // it. Keep looking, but remember it: it needs different advice
+                // from "nothing answered".
+                if(r.status===501){ setupErr=new Error((j&&j.error)||'shared store not configured'); setupErr.setup=true; continue; }
+                if(!r.ok || !j) throw new Error((j&&j.error)||('HTTP '+r.status));
+                if(!Array.isArray(j.pans)) throw new Error('unexpected response');
+                pansBase=eps[i];
+                return j.pans;
+            }catch(e){ lastErr=e; }
+        }
+        throw setupErr || lastErr || new Error('no endpoint reachable');
+    }
+    async function pushShared(pans){
+        var r=await fetch(pansBase||pansEndpoints()[0],{
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({pans:pans})
+        });
+        var j=await r.json().catch(function(){ return null; });
+        if(!r.ok || !j || !Array.isArray(j.pans)) throw new Error((j&&j.error)||('HTTP '+r.status));
+        return j;
+    }
+    // Adopt a list from the server as the new shared baseline and cache it, so
+    // the next load paints the full list before the network answers.
+    function applyShared(list){
+        sharedPans=list.slice();
+        store.set('sharedPans',JSON.stringify(sharedPans));
+        savePans();            // re-merges: anything now shared leaves localPans
+        renderChips();
+    }
+    // Runs at boot and on "refresh shared".
+    async function syncShared(quiet){
+        try{
+            var remote=await fetchShared();
+            sharedOk=true;
+            var have={}, missing=[];
+            remote.forEach(function(p){ have[p]=1; });
+            // Seed a brand-new store from the baseline, and hand up anything this
+            // browser is still holding locally so everyone else can see it too.
+            if(!remote.length){
+                splitPans(BASELINE_PANS).forEach(function(p){ if(!have[p]) missing.push(p); });
+            }
+            localPans.forEach(function(p){
+                if(!have[p] && PAN_RE.test(p) && missing.indexOf(p)<0) missing.push(p);
+            });
+            if(missing.length){
+                var res=await pushShared(missing);
+                if(res && Array.isArray(res.pans)) remote=res.pans;
+            }
+            sharedMode='ok';
+            applyShared(remote);
+            showShareSetup(false);
+            paintSharedBadge();
+            if(!quiet) toast(sharedPans.length+' PANs in the shared list');
+            return true;
+        }catch(e){
+            sharedOk=false;
+            // The cached/baseline list is already on screen; say so plainly
+            // rather than pretending the add was published.
+            sharedMode = (e && e.setup) ? 'setup' : 'down';
+            paintSharedBadge();
+            renderChips();          // wording of the counts/tooltips depends on the mode
+            if(sharedMode==='setup' && !store.get('shareSetupHidden','')) showShareSetup(true);
+            if(!quiet) toast(sharedMode==='setup'
+                ? 'Sharing is not set up — this list stays on this device'
+                : 'Shared list unreachable: '+(e.message||e), 'err');
+            return false;
+        }
+    }
+    // Publish just-added PANs. Fire-and-forget: they are already saved locally,
+    // so a network failure delays sharing but never loses them.
+    async function shareNewPans(pans){
+        var valid=pans.filter(function(p){ return PAN_RE.test(p); });
+        if(!valid.length) return;
+        if(!sharedOk){
+            paintSharedBadge(sharedMode==='setup'
+                ? 'sharing off — '+valid.length+' saved here only'
+                : 'not shared — '+valid.length+' saved here only');
+            return;
+        }
+        setSyncState('saving '+valid.length+' PAN'+(valid.length===1?'':'s')+'…','busy');
+        try{
+            var res=await pushShared(valid);
+            applyShared(res.pans);
+            paintSharedBadge();
+        }catch(e){
+            setSyncState('could not save — '+(e.message||e),'err');
+        }
+    }
+
+    function splitPans(text){
+        var out=[], seen={};
+        String(text||'').split(/[^A-Za-z0-9]+/).forEach(function(s){
+            var p=s.trim().toUpperCase();
+            if(p && !seen[p]){ seen[p]=1; out.push(p); }
+        });
+        return out;
+    }
+    function addPans(text,quiet){
+        var incoming=splitPans(text);
+        if(!incoming.length){ addMsg('Enter a PAN such as ABCDE1234F.','err'); return []; }
+        var have={}, fresh=[], dupes=0, bad=0;
+        panList.forEach(function(p){ have[p]=1; });
+        incoming.forEach(function(p){
+            if(have[p]){ dupes++; flashChip(p); return; }
+            if(!PAN_RE.test(p)) bad++;          // kept, but marked, so typos are visible
+            have[p]=1;
+            // Re-adding a shared PAN that was hidden here just un-hides it.
+            var h=hiddenPans.indexOf(p);
+            if(h>=0) hiddenPans.splice(h,1); else localPans.push(p);
+            fresh.push(p);
+        });
+        var saved=savePans();
+        renderChips();
+        if(fresh.length) flashChip(fresh[fresh.length-1]);
+        if(fresh.length) shareNewPans(fresh);
+        if(!quiet){
+            var bits=[];
+            if(fresh.length) bits.push(fresh.length+' added'+(saved?' and saved':' but NOT saved'));
+            if(dupes) bits.push(dupes+' already in the list');
+            if(bad)   bits.push(bad+' look invalid');
+            addMsg(bits.join(' · ') || 'Nothing to add', fresh.length?((bad||!saved)?'err':'ok'):'err');
+        }
+        // A run has already happened, so the new PANs join the table straight
+        // away instead of waiting for the next full "Check All PANs".
+        if(fresh.length && records.length && !running) checkNewPans(fresh);
+        return fresh;
+    }
+    // Append rows for just-added PANs and check them in place.
+    async function checkNewPans(pans){
+        var fresh=pans.filter(function(p){
+            for(var i=0;i<records.length;i++) if(records[i].pan===p) return false;
+            return true;
+        });
+        if(!fresh.length) return;
+        var added=fresh.map(function(p){ return newRecord(p,++seqNo); });
+        added.forEach(function(r){ records.push(r); });
+        refreshAll();
+        toast('Checking '+added.length+' new PAN'+(added.length===1?'':'s')+'…');
+        await runQueue(added);
+        focusRecord(added[0].id);
+    }
+    function removePan(pan){
+        if(panList.indexOf(pan)<0) return;
+        var shared=isShared(pan);
+        if(shared){
+            // Cannot delete it for everyone from the browser, so hide it here.
+            if(hiddenPans.indexOf(pan)<0) hiddenPans.push(pan);
+        } else {
+            var i=localPans.indexOf(pan);
+            if(i>=0) localPans.splice(i,1);
+        }
+        savePans(); renderChips();
+        addMsg(pan+(shared?(sharedMode==='ok'?' hidden on this device — it is still in the shared list'
+                                             :' hidden on this device'):' removed'),'');
+    }
+    function addMsg(text,cls){
+        $('#panAddMsg').removeClass('ok err').addClass(cls||'').text(text||'');
+    }
+    function chipState(pan){
+        for(var i=0;i<records.length;i++){
+            if(records[i].pan===pan){
+                if(records[i].status==='alloted') return 'hit';
+                if(records[i].status==='none')    return 'miss';
+                return '';
+            }
+        }
+        return '';
+    }
+    var chipSig='';
+    function renderChips(){
+        var $host=$('#panChips');
+        // render() runs after every PAN comes back; skip the rebuild unless
+        // something actually changed, so the chip area does not scroll-jump.
+        var bad=panList.filter(function(p){ return !PAN_RE.test(p); }).length;
+        var shownShared=panList.length-localPans.length;
+        // With sharing off, "N shared" would be a lie: those PANs only exist in
+        // this browser, so the split is not reported at all.
+        $('#panCountHint').text(panList.length+' PAN'+(panList.length===1?'':'s')+
+            (sharedMode==='ok'
+                ? ' · '+shownShared+' shared'+
+                  (localPans.length?' · '+localPans.length+' yours (not shared yet)':'')
+                : (localPans.length?' · '+localPans.length+' added here':''))+
+            (hiddenPans.length?' · '+hiddenPans.length+' hidden here':'')+
+            (bad?' · '+bad+' look invalid':''));
+        var sig=sharedMode+'#'+panList.map(function(p){ return p+':'+chipState(p)+':'+(isShared(p)?'g':'l'); }).join('|');
+        if(sig===chipSig) return;
+        chipSig=sig;
+        if(!panList.length){
+            $host.html('<div class="chips-empty">No PANs yet — add one above, paste a list, or load the sample.</div>');
+        } else {
+            $host.html(panList.map(function(p){
+                var shared=isShared(p);
+                var cls=[PAN_RE.test(p)?'':'bad', chipState(p), shared?'':'local'].filter(Boolean).join(' ');
+                var title=!PAN_RE.test(p) ? 'Does not look like a valid PAN'
+                        : (sharedMode!=='ok' ? 'Saved in this browser — sharing is not switched on'
+                        : (shared ? 'In the shared list — everyone opening this link sees it'
+                                  : 'On this device only — not published to the shared list yet'));
+                var rm=(shared && sharedMode==='ok') ? 'Hide '+p+' on this device (the shared list keeps it)' : 'Remove '+p;
+                return '<span class="chip '+cls+'" role="listitem" data-pan="'+esc(p)+'">'+
+                       '<button type="button" class="txt" title="'+esc(title)+'">'+esc(p)+
+                       (shared?'':'<span aria-hidden="true"> •</span>')+'</button>'+
+                       '<button type="button" class="x" title="'+esc(rm)+'" aria-label="'+esc(rm)+'">×</button>'+
+                       '</span>';
+            }).join(''));
+        }
+    }
+    function flashChip(pan){
+        var $c=$('#panChips .chip[data-pan="'+pan+'"]');
+        if(!$c.length) return;
+        $c.addClass('flash');
+        setTimeout(function(){ $c.removeClass('flash'); },820);
+        var host=document.getElementById('panChips');
+        if(host && $c[0].offsetTop+$c[0].offsetHeight > host.scrollTop+host.clientHeight){
+            host.scrollTop = $c[0].offsetTop - host.clientHeight + $c[0].offsetHeight + 10;
+        }
+    }
+
+    $('#panAddBtn').on('click',function(){
+        var $i=$('#panAdd');
+        if(addPans($i.val()).length) $i.val('');
+        $i.focus();
+    });
+    $('#panAdd').on('keydown',function(ev){
+        if(ev.key==='Enter'||ev.key===','){ ev.preventDefault(); $('#panAddBtn').trigger('click'); }
+    }).on('input',function(){
+        this.value=this.value.toUpperCase();
+        if($('#panAddMsg').text()) addMsg('');
+    });
+    $('#panBulkAdd').on('click',function(){
+        var n=addPans($('#panInput').val(),true).length;
+        $('#panInput').val('');
+        toast(n?n+' PAN'+(n===1?'':'s')+' added':'No new PANs found', n?'ok':'err');
+        addMsg(n?n+' added from the pasted list':'Nothing new in the pasted list', n?'ok':'err');
+    });
+    $('#panChips').on('click','.x',function(){
+        // attr, not data: an all-digit typo would otherwise be coerced to a number
+        removePan($(this).closest('.chip').attr('data-pan'));
+    }).on('click','.txt',function(){
+        var pan=$(this).closest('.chip').attr('data-pan');
+        var rec=null;
+        for(var i=0;i<records.length;i++){ if(records[i].pan===pan){ rec=records[i]; break; } }
+        if(rec) focusRecord(rec.id);
+        else { $('#searchBox').val(pan).trigger('input'); toast(pan+' has not been checked yet'); }
+    });
+    $('#expandChips').on('click',function(e){
+        e.preventDefault();
+        var on=$('#panChips').toggleClass('expanded').hasClass('expanded');
+        $(this).text(on?'show less':'show all');
+    });
+    // The "saved on this device" pill only earns its space when it is bad news.
+    if(!store.ok) $('#panSaveState').removeClass('hidden').addClass('err').text('NOT saved — storage is blocked');
+    renderChips();
+
+    /* ------------------------------------------------------------------ *
+     * Theme, persistence, misc chrome
+     * ------------------------------------------------------------------ */
+    function applyTheme(t){
+        document.documentElement.setAttribute('data-theme',t);
+        $('#themeToggle').text(t==='dark'?'☀️':'🌙');
+        $('meta[name=theme-color]').attr('content',t==='dark'?'#0f141b':'#2563eb');
+        store.set('theme',t);
+        drawDonut(); drawBars();
+    }
+    var savedTheme=store.get('theme',null);
+    applyTheme(savedTheme || (window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
+    $('#themeToggle').on('click',function(){
+        applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
+    });
+
+    $('#clientId').val(store.get('clientId',''));
+    $('#speedSelect').val(store.get('speed','4'));
+    var savedType=store.get('clientType','FINTECH');
+    $('input[name=clientType][value="'+savedType+'"]').prop('checked',true);
+    updateClientTypeUI();
+    $('#lotSize').val(store.get('lot',''));
+    function readCfg(){
+        cfg.lot=Math.max(0,parseInt($('#lotSize').val(),10)||0);
+        store.set('lot',$('#lotSize').val());
+    }
+    $('#lotSize').on('input change',function(){ readCfg(); refreshAll(); });
+    $('#proxyUrl').val(store.get('proxy',''));
+    $('#proxyUrl').on('input change',function(){ store.set('proxy',this.value.trim()); });
+    readCfg();
+
+    $('#clientId').on('input',function(){ store.set('clientId',this.value); });
+    $('#mugIpoSelect').on('change',syncMugClientId);
+    $('#mugClientId').on('input',syncMugClientId);
+    $('#mugClientId').val(store.get('mugClientId',''));
+    $('#speedSelect').on('change',function(){ store.set('speed',this.value); });
+    $('input[name=clientType]').on('change',function(){ store.set('clientType',this.value); updateClientTypeUI(); });
+    $('#mugUrl').on('change input',function(){
+        if($('input[name=clientType]:checked').val()==='MUG') loadMufgIpos();
+    });
+
+    $('#loadSample').on('click',function(e){
+        e.preventDefault(); addPans(SAMPLE);
+    });
+    $('#syncPans').on('click',function(e){
+        e.preventDefault();
+        setSyncState('checking shared list…','busy');
+        syncShared(false);
+    });
+    $('#copyPans').on('click',function(e){
+        e.preventDefault();
+        if(!panList.length){ toast('No PANs to copy','err'); return; }
+        copyText(panList.join(', '), panList.length+' PANs copied');
+    });
+    $('#clearPans').on('click',function(e){
+        e.preventDefault();
+        if(!panList.length) return;
+        var n=panList.length;
+        localPans=[];
+        hiddenPans=sharedPans.slice();      // shared entries can only be hidden locally
+        savePans(); renderChips();
+        toast(n+' PAN'+(n===1?'':'s')+' cleared on this device'+
+              (sharedMode==='ok'&&sharedPans.length?' — the shared list is untouched':''));
+        $('#panAdd').focus();
+    });
+
+    $(window).on('scroll',function(){ $('#toTop').toggleClass('show',window.scrollY>420); });
+    $('#toTop').on('click',function(){ window.scrollTo({top:0,behavior:'smooth'}); });
+
+    $(document).on('keydown',function(ev){
+        var typing=/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName);
+        if((ev.ctrlKey||ev.metaKey)&&ev.key==='Enter'){ ev.preventDefault(); $('#fetchBtn').trigger('click'); return; }
+        if(ev.key==='/'&&!typing){ ev.preventDefault(); $('#searchBox').focus(); return; }
+        if(ev.key==='Escape'&&ev.target.id==='searchBox'){ $('#searchBox').val('').trigger('input'); }
+    });
+
+    refreshAll();
+    setBusy(false,'Ready — '+(getClientId()?'':'select an IPO / enter a Client ID, then ')+'tap Check All PANs.','');
+    // Pull the shared list last, so the cached/baseline PANs are already on
+    // screen and the fetch only ever adds to what is shown.
+    syncShared(true);
+});
+</script>
+</body>
+</html>
